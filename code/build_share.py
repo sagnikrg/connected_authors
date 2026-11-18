@@ -8,15 +8,18 @@ Usage:
 """
 import json,glob,os,sys
 EMBED_CSS='''
-html,body{height:100%}
+html,body{height:100%;overflow:hidden}
 body{padding:0!important}
 .wrap{max-width:none!important;height:100%;gap:0!important}
-header,.foot{display:none!important}
-.graphbox{height:100%;border:0!important;border-radius:0!important;grid-template-columns:minmax(0,1fr)!important;position:relative}
+header,.foot,.panel{display:none!important}
+.graphbox{height:100%;border:0!important;border-radius:0!important;grid-template-columns:minmax(0,1fr)!important}
 .stage{height:100%!important}
-.panel{position:absolute;right:10px;top:48px;width:min(270px,45%);max-height:calc(100% - 96px)!important;border:1px solid var(--line)!important;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14)}
-.panel[data-empty="1"]{display:none}
 '''
+# Caption for the website under the embed (numbers from graph.json); printed by --caption
+def caption(g):
+    n=sum(1 for v in g['nodes'].values() if v>0)
+    return (f"{n} people with papers, {len(g['edges'])} co-author links, from {g['papers']} PDFs (built {g['built']}). "
+            "Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear.")
 args=[a for a in sys.argv[1:] if not a.startswith('--')]; standalone='--standalone' in sys.argv; embed='--embed' in sys.argv
 D,tpl,out=args
 g=json.load(open(os.path.join(D,'graph.json'),encoding='utf8'))
@@ -34,4 +37,5 @@ if standalone:
           '<style>*,*::before,*::after{box-sizing:border-box}body{margin:0;font-size:14px}[hidden]{display:none!important}</style>\n'
           + html[:i] + '\n</head>\n<body>\n' + html[i:] + '\n</body>\n</html>\n')
 open(out,'w',encoding='utf8').write(html)
+if '--caption' in sys.argv: print('CAPTION:',caption(g))
 print('people',len(people),'edges',len(g['edges']),'->',out)

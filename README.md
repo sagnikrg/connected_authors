@@ -17,7 +17,7 @@
 | `data/papers.csv` | every PDF scanned: file, how it was matched, people on it, year |
 | `data/graph.json` | nodes (id → paper count) and edges (id, id, shared papers) |
 | `site/index.html` | full standalone page, copied to `sagnikrg.github.io/connected-authors/` |
-| `site/embed.html` | graph only, fills its frame; embedded 16:9 on the homepage (`--embed`) |
+| `site/embed.html` | graph area only, no panel, no scrolling; embedded at 776:547 on the homepage (`--embed`); `--caption` prints the homepage caption |
 | `artifact/friends_page.html` | source of the private friends page (Claude artifact) |
 
 The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not part of this repo.
@@ -29,8 +29,9 @@ The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not pa
 python -I code/build_graph.py data "<Thesis>/tex/.src/.bib" "<Dropbox>/MIPT" "<Dropbox>/Quantum circuit"
 # 2. rebuild the standalone page
 python -I code/build_share.py data code/share_template.html site/index.html --standalone
-python -I code/build_share.py data code/share_template.html site/embed.html --standalone --embed
-# 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/, commit + push both repos
+python -I code/build_share.py data code/share_template.html site/embed.html --standalone --embed --caption
+# 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/,
+#    paste the --caption line into the <sub> under the iframe in its README.md, commit + push both repos
 ```
 
 New people go into `data/friends/<id>.json` (`{"name": ...}`) before step 1.
