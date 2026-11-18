@@ -28,7 +28,8 @@ The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not pa
 python -I code/build_graph.py data "<Thesis>/tex/.src/.bib" "<Dropbox>/MIPT" "<Dropbox>/Quantum circuit"
 # 2. rebuild the standalone page
 python -I code/build_share.py data code/share_template.html site/index.html --standalone
-# 3. copy site/index.html to sagnikrg.github.io/connected-authors/index.html, commit + push both repos
+python -I code/build_share.py data code/share_template.html site/embed.html --standalone --embed
+# 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/index.html, commit + push both repos
 ```
 
 New people go into `data/friends/<id>.json` (`{"name": ...}`) before step 1.
