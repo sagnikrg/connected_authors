@@ -16,7 +16,8 @@
 | `data/friends/*.json` | the people on the list (name, folder, co-author note); file name = id |
 | `data/papers.csv` | every PDF scanned: file, how it was matched, people on it, year |
 | `data/graph.json` | nodes (id → paper count) and edges (id, id, shared papers) |
-| `site/index.html` | standalone snapshot, copied to `sagnikrg.github.io/connected-authors/` |
+| `site/index.html` | full standalone page, copied to `sagnikrg.github.io/connected-authors/` |
+| `site/embed.html` | graph only, fills its frame; embedded 16:9 on the homepage (`--embed`) |
 | `artifact/friends_page.html` | source of the private friends page (Claude artifact) |
 
 The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not part of this repo.
@@ -29,7 +30,7 @@ python -I code/build_graph.py data "<Thesis>/tex/.src/.bib" "<Dropbox>/MIPT" "<D
 # 2. rebuild the standalone page
 python -I code/build_share.py data code/share_template.html site/index.html --standalone
 python -I code/build_share.py data code/share_template.html site/embed.html --standalone --embed
-# 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/index.html, commit + push both repos
+# 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/, commit + push both repos
 ```
 
 New people go into `data/friends/<id>.json` (`{"name": ...}`) before step 1.
