@@ -13,11 +13,12 @@
 | `code/build_graph.py` | scans the paper PDFs, matches each to a bib entry (DOI / arXiv / PhysRev id, checked against the page-1 title), else reads the page-1 author line; writes `papers.csv` and `graph.json` |
 | `code/build_share.py` | embeds `graph.json` + names into `share_template.html` |
 | `code/share_template.html` | the graph page (d3 v7 force layout) |
+| `code/embed_template.html` | plot area only, fills its frame; source of `site/embed.html` |
 | `data/friends/*.json` | the people on the list (name, folder, co-author note); file name = id |
 | `data/papers.csv` | every PDF scanned: file, how it was matched, people on it, year |
 | `data/graph.json` | nodes (id → paper count) and edges (id, id, shared papers) |
 | `site/index.html` | full standalone page, copied to `sagnikrg.github.io/connected-authors/` |
-| `site/embed.html` | graph area only, no panel, no scrolling; embedded at 776:547 on the homepage (`--embed`); `--caption` prints the homepage caption |
+| `site/embed.html` | graph area only, no panel, no scrolling; embedded at 776:547 on the homepage (from `embed_template.html`); `--caption` prints the homepage caption |
 | `artifact/friends_page.html` | source of the private friends page (Claude artifact) |
 
 The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not part of this repo.
@@ -29,7 +30,7 @@ The PDFs themselves stay in Dropbox (`MIPT/`, `Quantum circuit/`) and are not pa
 python -I code/build_graph.py data "<Thesis>/tex/.src/.bib" "<Dropbox>/MIPT" "<Dropbox>/Quantum circuit"
 # 2. rebuild the standalone page
 python -I code/build_share.py data code/share_template.html site/index.html --standalone
-python -I code/build_share.py data code/share_template.html site/embed.html --standalone --embed --caption
+python -I code/build_share.py data code/embed_template.html site/embed.html --standalone --caption
 # 3. copy site/index.html and site/embed.html to sagnikrg.github.io/connected-authors/,
 #    paste the --caption line into the <sub> under the iframe in its README.md, commit + push both repos
 ```
