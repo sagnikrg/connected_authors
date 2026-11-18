@@ -1,0 +1,392 @@
+<title>Thesis Friends List</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+/* Layout: one column; co-author graph on top (canvas + detail panel), then sticky filter and three nested tiers as card grids */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --fg:#17202b; --muted:#5d6876; --line:#dfe3e9;
+  --core:#2f5d8a; --core-soft:#e3ecf6; --strong:#3d7a5e; --strong-soft:#e2f1ea; --super:#9aa3ae; --on-accent:#ffffff;
+  --edge:#8a95a3; --graph-bg:#fbfcfd;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:"Inter",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161c; --surface:#1a2029; --fg:#e6ebf1; --muted:#9aa5b3; --line:#2c3440;
+  --core:#7fb0e0; --core-soft:#1f3347; --strong:#7cc4a2; --strong-soft:#1d3a2e; --super:#5f6976; --on-accent:#0e1620;
+  --edge:#6b7685; --graph-bg:#151a21; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161c; --surface:#1a2029; --fg:#e6ebf1; --muted:#9aa5b3; --line:#2c3440;
+  --core:#7fb0e0; --core-soft:#1f3347; --strong:#7cc4a2; --strong-soft:#1d3a2e; --super:#5f6976; --on-accent:#0e1620;
+  --edge:#6b7685; --graph-bg:#151a21; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h1{font-family:var(--display);font-weight:600;font-size:1.7rem;margin:0;text-wrap:balance}
+.lede{color:var(--muted);margin:6px 0 0;max-width:68ch}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:12px}
+.rule{font-size:.85rem;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);min-width:0}
+.rule b{font-family:var(--display);font-weight:600}
+
+/* graph */
+.graphbox{display:grid;grid-template-columns:minmax(0,1fr) 260px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--graph-bg)}
+@media (max-width:760px){.graphbox{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;height:clamp(380px,62vh,620px);min-width:0}
+.stage svg{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+.stage svg:active{cursor:grabbing}
+.gtools{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.gbtn{all:unset;box-sizing:border-box;cursor:pointer;font-size:.78rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.gbtn:hover{border-color:var(--fg)}
+.gbtn:focus-visible{outline:2px solid var(--core);outline-offset:2px}
+.gbtn[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.find{font:inherit;font-size:.8rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);width:170px;min-width:0}
+.find:focus-visible{outline:2px solid var(--core);outline-offset:1px}
+.seg{display:inline-flex;gap:0}
+.seg .gbtn{border-radius:0;margin-left:-1px}
+.seg .gbtn:first-child{border-radius:999px 0 0 999px;margin-left:0}
+.seg .gbtn:last-child{border-radius:0 999px 999px 0}
+.legend{position:absolute;left:10px;bottom:10px;display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 9px}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.tip{position:absolute;pointer-events:none;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.12);max-width:240px}
+.panel{border-left:1px solid var(--line);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;overflow:auto;max-height:clamp(380px,62vh,620px)}
+@media (max-width:760px){.panel{border-left:0;border-top:1px solid var(--line);max-height:none}}
+.panel h3{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0}
+.panel .meta{font-size:.82rem;color:var(--muted)}
+.panel ol{margin:0;padding-left:1.2em;font-size:.85rem;display:flex;flex-direction:column;gap:2px}
+.panel ol button{all:unset;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+.panel ol button:hover{text-decoration-color:var(--fg)}
+.panel .w{font-variant-numeric:tabular-nums;color:var(--muted)}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:999px;color:var(--on-accent)}
+.node{cursor:pointer}
+.node text{font-family:var(--body);font-size:10px;fill:var(--fg);paint-order:stroke;stroke:var(--graph-bg);stroke-width:3px;pointer-events:none}
+
+/* list */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+.tally{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem}
+.tally b{color:var(--fg)}
+input#q{flex:1 1 220px;min-width:0;font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+input#q:focus-visible{outline:2px solid var(--core);outline-offset:1px}
+.status{font-size:.82rem;color:var(--muted)}
+section h2{font-family:var(--display);font-weight:500;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;display:flex;gap:8px;align-items:baseline}
+section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.card{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0;scroll-margin-top:80px}
+.card[data-level="1"]{border-color:var(--strong);background:var(--strong-soft)}
+.card[data-level="2"]{border-color:var(--core);background:var(--core-soft)}
+.card.flash{outline:3px solid var(--fg);outline-offset:2px}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.name{font-weight:600;min-width:0}
+.count{font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--muted);white-space:nowrap}
+.d{font-family:var(--mono);font-size:.74rem;color:var(--muted);overflow-wrap:anywhere}
+.toggles{display:flex;gap:6px;flex-wrap:wrap}
+.t{all:unset;box-sizing:border-box;cursor:pointer;font-size:.78rem;font-weight:500;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+.t:hover{border-color:var(--fg);color:var(--fg)}
+.t:focus-visible{outline:2px solid var(--core);outline-offset:2px}
+.t.strong[aria-pressed="true"]{background:var(--strong);border-color:var(--strong);color:var(--on-accent)}
+.t.core[aria-pressed="true"]{background:var(--core);border-color:var(--core);color:var(--on-accent)}
+.t[disabled]{cursor:progress;opacity:.6}
+.empty{color:var(--muted);padding:20px;border:1px dashed var(--line);border-radius:8px;text-align:center}
+@media (prefers-reduced-motion:no-preference){.card,.t{transition:background .12s,border-color .12s,color .12s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Thesis friends list</h1>
+    <p class="lede">Who wrote the papers in my collection, and who wrote them together. Bubble size is the number of their papers in Dropbox/MIPT and Quantum circuit; a link's thickness is the number of papers in that collection the two wrote together.</p>
+  </header>
+
+  <div class="graphbox">
+    <div class="stage" id="stage">
+      <svg id="svg" role="img" aria-label="Co-author graph of friends in the paper collection"></svg>
+      <div class="gtools">
+        <span class="seg" role="group" aria-label="Which tiers to show">
+          <button class="gbtn tier" type="button" data-min="2" aria-pressed="false">Core</button>
+          <button class="gbtn tier" type="button" data-min="1" aria-pressed="false">Core + Strong</button>
+          <button class="gbtn tier" type="button" data-min="0" aria-pressed="true">Core + Strong + Superset</button>
+        </span>
+        <input class="find" id="find" list="names" type="search" placeholder="Find a friend…" aria-label="Find a friend and centre the graph on them">
+        <datalist id="names"></datalist>
+        <button class="gbtn" id="only" type="button" aria-pressed="false" title="When someone is selected, hide everyone who is not their co-author">Only their cluster</button>
+        <button class="gbtn" id="lonely" type="button" aria-pressed="false">Hide unlinked</button>
+        <button class="gbtn" id="labels" type="button" aria-pressed="false">All names</button>
+        <button class="gbtn" id="reset" type="button">Reset view</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--core)"></i>Core</span>
+        <span><i class="dot" style="background:var(--strong)"></i>Strong overlap</span>
+        <span><i class="dot" style="background:var(--super)"></i>Superset</span>
+      </div>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <aside class="panel" id="panel" aria-live="polite">
+      <h3>Pick someone</h3>
+      <p class="meta" id="gmeta">Loading the graph…</p>
+      <p class="meta">Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear.</p>
+    </aside>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>Core friends</b><br>The friend writing rule applies (full names, "we rephrase", technicalities to them).</div>
+    <div class="rule"><b>Strong overlap</b><br>Gets author tags in paper filenames for search.</div>
+    <div class="rule"><b>Superset of overlap</b><br>Everyone else on the list. No tags, no writing rule.</div>
+  </div>
+  <div class="bar">
+    <span class="tally" id="tally">Loading…</span>
+    <input id="q" type="search" placeholder="Filter by name, folder or co-author" aria-label="Filter by name, folder or co-author">
+    <span class="status" id="status" aria-live="polite"></span>
+  </div>
+  <section><h2>Core friends <span class="n" id="n2"></span></h2><div class="grid" id="g2"></div></section>
+  <section><h2>Strong overlap <span class="n" id="n1"></span></h2><div class="grid" id="g1"></div></section>
+  <section><h2>Superset of overlap <span class="n" id="n0"></span></h2><div class="grid" id="g0"></div></section>
+</div>
+
+<script>
+let rows=[], q="", db=null, busy=new Set(), graph=null, sel=null;
+const $=id=>document.getElementById(id);
+const lvl=r=>typeof r.level==="number"?r.level:(r.core?2:0);
+const byId=()=>Object.fromEntries(rows.map(r=>[r.id,r]));
+const papers=id=>graph&&graph.nodes?(graph.nodes[id]||0):null;
+
+/* ---------- cards ---------- */
+function toggle(cls,label,on,disabled,fn){
+  const b=document.createElement("button");
+  b.type="button"; b.className="t "+cls; b.textContent=label;
+  b.setAttribute("aria-pressed",on?"true":"false"); b.disabled=disabled;
+  b.addEventListener("click",fn); return b;
+}
+function card(r){
+  const L=lvl(r), dis=!db||busy.has(r.id);
+  const c=document.createElement("div"); c.className="card"; c.dataset.level=String(L); c.id="f-"+r.id;
+  const top=document.createElement("div"); top.className="top";
+  const n=document.createElement("div"); n.className="name"; n.textContent=r.name;
+  const k=document.createElement("div"); k.className="count";
+  const p=papers(r.id); k.textContent=p===null?"":(p===1?"1 paper":p+" papers");
+  top.append(n,k);
+  const d=document.createElement("div"); d.className="d"; d.textContent=r.folder?("MIPT/"+r.folder):(r.note||"no own folder");
+  const t=document.createElement("div"); t.className="toggles";
+  t.append(toggle("strong","Strong",L>=1,dis,()=>setLevel(r,L>=1?0:1)),toggle("core","Core",L>=2,dis,()=>setLevel(r,L>=2?1:2)));
+  c.append(top,d,t); return c;
+}
+function sortRows(a,b){
+  const pa=papers(a.id)||0, pb=papers(b.id)||0;
+  return pb-pa||a.name.localeCompare(b.name);
+}
+function renderList(){
+  const f=rows.filter(r=>!q||(r.name+" "+(r.folder||"")+" "+(r.note||"")).toLowerCase().includes(q));
+  for(const L of [2,1,0]){
+    const list=f.filter(r=>lvl(r)===L).sort(sortRows);
+    const msg=!rows.length?"The list appears here once it loads.":(q?"No match.":(L===2?"No core friends yet.":L===1?"Nobody here yet. Tick Strong on a card below.":"Everyone has been promoted."));
+    $("g"+L).replaceChildren(...(list.length?list.map(card):[Object.assign(document.createElement("div"),{className:"empty",textContent:msg})]));
+    $("n"+L).textContent=rows.length?String(rows.filter(r=>lvl(r)===L).length):"";
+  }
+  const c2=rows.filter(r=>lvl(r)>=2).length, c1=rows.filter(r=>lvl(r)>=1).length;
+  $("tally").innerHTML=rows.length?`<b>${c2}</b> core · <b>${c1}</b> strong overlap (incl. core) · <b>${rows.length}</b> in the superset`:"No friends loaded yet";
+}
+async function setLevel(r,L){
+  if(!db||busy.has(r.id))return;
+  busy.add(r.id); renderList();
+  try{ await db.collection("friends").doc(r.id).update({level:L,core:L===2}); $("status").textContent="Saved"; }
+  catch(e){ $("status").textContent="Could not save: "+(e&&e.message||"try again"); }
+  busy.delete(r.id); renderList();
+}
+$("q").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();renderList();});
+function showCard(id){
+  const el=$("f-"+id); if(!el)return;
+  if(q){q="";$("q").value="";renderList();}
+  const e2=$("f-"+id); e2.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"center"});
+  e2.classList.add("flash"); setTimeout(()=>e2.classList.remove("flash"),1600);
+}
+
+/* ---------- graph ---------- */
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const colorOf=L=>L>=2?css("--core"):L===1?css("--strong"):css("--super");
+let G=null; // {sim, nodeSel, linkSel, nodes, links, zoom, svgSel, gSel}
+let hideLonely=false, allLabels=false, minL=0, onlyCluster=false;
+const rad=p=>p>0?4+3.2*Math.sqrt(p):3;
+
+function buildGraph(){
+  if(!window.d3||!graph||!rows.length)return;
+  const R=byId();
+  const prev=G?Object.fromEntries(G.nodes.map(n=>[n.id,n])):{};
+  const inTier=new Set(rows.filter(r=>lvl(r)>=minL).map(r=>r.id));
+  const deg={}; for(const [a,b] of graph.edges){ if(inTier.has(a)&&inTier.has(b)){deg[a]=(deg[a]||0)+1;deg[b]=(deg[b]||0)+1;} }
+  const nodes=rows.filter(r=>inTier.has(r.id)&&(graph.nodes[r.id]||0)>0&&(!hideLonely||deg[r.id])).map(r=>{
+    const o=prev[r.id]||{}; return {id:r.id,name:r.name,p:graph.nodes[r.id]||0,x:o.x,y:o.y,vx:o.vx,vy:o.vy};
+  });
+  const ids=new Set(nodes.map(n=>n.id));
+  const links=graph.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w}));
+  const svg=d3.select("#svg"); svg.selectAll("*").remove();
+  const box=$("stage").getBoundingClientRect(), W=box.width, H=box.height;
+  svg.attr("viewBox",[-W/2,-H/2,W,H]);
+  const g=svg.append("g");
+  const link=g.append("g").attr("stroke",css("--edge")).attr("stroke-linecap","round").selectAll("line").data(links).join("line")
+    .attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",0.45);
+  const node=g.append("g").selectAll("g").data(nodes,d=>d.id).join("g").attr("class","node");
+  node.append("circle").attr("r",d=>rad(d.p)).attr("fill",d=>colorOf(lvl(R[d.id]||{}))).attr("stroke",css("--graph-bg")).attr("stroke-width",1.5);
+  node.append("text").attr("dy",d=>-rad(d.p)-4).attr("text-anchor","middle").text(d=>d.name);
+  const sim=d3.forceSimulation(nodes)
+    .force("link",d3.forceLink(links).id(d=>d.id).distance(d=>rad(d.source.p)+rad(d.target.p)+150/Math.sqrt(d.w)).strength(d=>Math.min(0.8,0.15+0.08*d.w)))
+    .force("charge",d3.forceManyBody().strength(d=>-180-60*Math.sqrt(d.p)).distanceMax(600))
+    .force("collide",d3.forceCollide(d=>rad(d.p)+10))
+    .force("x",d3.forceX(0).strength(0.025)).force("y",d3.forceY(0).strength(0.035))
+    .on("tick",()=>{
+      link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+      node.attr("transform",d=>`translate(${d.x},${d.y})`);
+    });
+  const fresh=!Object.keys(prev).length;
+  if(!fresh) sim.alpha(0.5);
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches){sim.stop();for(let i=0;i<300;i++)sim.tick();sim.on("tick")();}
+  const zoom=d3.zoom().scaleExtent([0.15,5]).on("zoom",e=>{g.attr("transform",e.transform);if(G){G.k=e.transform.k;applyLabels();}});
+  svg.call(zoom).on("dblclick.zoom",null);
+  svg.on("click",e=>{if(e.target===svg.node())select(null);});
+  node.call(d3.drag()
+    .on("start",(e,d)=>{if(!e.active)sim.alphaTarget(0.25).restart();d.fx=d.x;d.fy=d.y;})
+    .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y;})
+    .on("end",(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}));
+  node.on("click",(e,d)=>{e.stopPropagation();select(d.id);})
+    .on("mouseenter",(e,d)=>tipShow(e,d)).on("mousemove",(e,d)=>tipShow(e,d)).on("mouseleave",()=>{$("tip").hidden=true;});
+  G={sim,node,link,nodes,links,zoom,svg,g,k:1};
+  const k0=fresh?Math.min(1,Math.sqrt(40/Math.max(nodes.length,1))+0.25):d3.zoomTransform(svg.node()).k;
+  svg.call(zoom.transform,fresh?d3.zoomIdentity.scale(k0):d3.zoomTransform(svg.node()));
+  applyLabels(); highlight();
+  $("gmeta").textContent=`${nodes.length} people with papers, ${links.length} co-author links, from ${graph.papers} PDFs (built ${graph.built}).`;
+}
+function neighbours(id){
+  const m=new Map();
+  for(const [a,b,w] of graph.edges){ if(a===id)m.set(b,w); else if(b===id)m.set(a,w); }
+  return [...m.entries()].sort((x,y)=>y[1]-x[1]);
+}
+function applyLabels(){
+  if(!G)return;
+  const nb=sel?new Set([sel,...neighbours(sel).map(x=>x[0])]):null;
+  G.node.select("text").attr("display",d=>{
+    if(nb) return nb.has(d.id)?null:"none";
+    return allLabels||d.p>=6||(G.k>1.6&&d.p>=2)||G.k>2.6?null:"none";
+  });
+}
+function highlight(){
+  if(!G)return;
+  const R=byId();
+  G.node.select("circle").attr("fill",d=>colorOf(lvl(R[d.id]||{})));
+  if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("stroke-opacity",0.45).attr("stroke",css("--edge")).attr("display",null);applyLabels();return;}
+  const nb=new Set([sel,...neighbours(sel).map(x=>x[0])]);
+  const touches=d=>d.source.id===sel||d.target.id===sel;
+  if(onlyCluster){
+    G.node.attr("display",d=>nb.has(d.id)?null:"none").attr("opacity",1);
+    G.link.attr("display",d=>nb.has(d.source.id)&&nb.has(d.target.id)?null:"none")
+          .attr("stroke-opacity",d=>touches(d)?0.9:0.35).attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+  } else {
+    G.node.attr("display",null).attr("opacity",d=>nb.has(d.id)?1:0.15);
+    G.link.attr("display",null).attr("stroke-opacity",d=>touches(d)?0.9:0.05)
+          .attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+  }
+  applyLabels();
+}
+function tipShow(e,d){
+  const t=$("tip"), s=$("stage").getBoundingClientRect(), nb=neighbours(d.id), R=byId();
+  t.innerHTML=""; const b=document.createElement("b"); b.textContent=d.name; t.append(b);
+  const l=document.createElement("div"); l.textContent=`${d.p} paper${d.p===1?"":"s"} · ${nb.length} co-author${nb.length===1?"":"s"} here`;
+  t.append(l);
+  if(nb.length){const m=document.createElement("div");m.style.color="var(--muted)";m.textContent="Most with "+nb.slice(0,3).map(([id,w])=>(R[id]?.name||id)+" ("+w+")").join(", ");t.append(m);}
+  t.hidden=false;
+  let x=e.clientX-s.left+12, y=e.clientY-s.top+12;
+  if(x+250>s.width)x=e.clientX-s.left-250; if(y+90>s.height)y=e.clientY-s.top-90;
+  t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
+}
+function select(id){
+  sel=id; highlight();
+  const P=$("panel"); P.replaceChildren();
+  if(!id){
+    P.append(Object.assign(document.createElement("h3"),{textContent:"Pick someone"}),
+      Object.assign(document.createElement("p"),{className:"meta",textContent:$("gmeta")?.textContent||""}),
+      Object.assign(document.createElement("p"),{className:"meta",textContent:"Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear."}));
+    const gm=P.querySelector(".meta"); gm.id="gmeta";
+    if(G) gm.textContent=`${G.nodes.length} people with papers, ${G.links.length} co-author links, from ${graph.papers} PDFs (built ${graph.built}).`;
+    return;
+  }
+  const R=byId(), r=R[id], L=lvl(r||{}), nb=neighbours(id);
+  const h=document.createElement("h3"); h.textContent=r?.name||id;
+  const pill=document.createElement("span"); pill.className="pill"; pill.style.background=colorOf(L);
+  pill.textContent=L>=2?"Core":L===1?"Strong overlap":"Superset";
+  const m=document.createElement("p"); m.className="meta";
+  m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${r?.folder?" · MIPT/"+r.folder:""}`;
+  P.append(h,pill,m);
+  if(nb.length){
+    const s=document.createElement("p"); s.className="meta"; s.textContent="Co-authors in the collection (shared papers):";
+    const ol=document.createElement("ol");
+    for(const [nid,w] of nb){
+      const li=document.createElement("li"); const b=document.createElement("button"); b.type="button";
+      b.textContent=R[nid]?.name||nid; b.addEventListener("click",()=>select(nid));
+      const sp=document.createElement("span"); sp.className="w"; sp.textContent=" "+w;
+      li.append(b,sp); ol.append(li);
+    }
+    P.append(s,ol);
+  } else P.append(Object.assign(document.createElement("p"),{className:"meta",textContent:"No co-authored papers with other friends in the collection."}));
+  const go=document.createElement("button"); go.type="button"; go.className="gbtn"; go.textContent="Show card below";
+  go.addEventListener("click",()=>showCard(id)); P.append(go);
+}
+function centreOn(id,tries=0){
+  if(!G)return;
+  const n=G.nodes.find(x=>x.id===id);
+  if(!n){
+    if(tries===0&&(minL>0||hideLonely)){ // not in this view: switch to the full view, then centre
+      minL=0; hideLonely=false; $("lonely").setAttribute("aria-pressed","false");
+      document.querySelectorAll(".tier").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.min==="0")));
+      G=null; graphBuiltFor=""; refresh(); setTimeout(()=>centreOn(id,1),400);
+    } else $("status").textContent="No papers in the collection for that person, so they are not in the graph.";
+    return;
+  }
+  select(id);
+  const k=Math.max(d3.zoomTransform(G.svg.node()).k,1.3);
+  const t=d3.zoomIdentity.scale(k).translate(-n.x,-n.y);
+  const rm=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  (rm?G.svg:G.svg.transition().duration(600)).call(G.zoom.transform,t);
+}
+function fillNames(){
+  const dl=$("names"); dl.replaceChildren(...rows.filter(r=>(papers(r.id)||0)>0).sort((a,b)=>a.name.localeCompare(b.name))
+    .map(r=>Object.assign(document.createElement("option"),{value:r.name})));
+}
+function findGo(){
+  const v=$("find").value.trim().toLowerCase(); if(!v)return;
+  const hit=rows.find(r=>r.name.toLowerCase()===v)||rows.find(r=>r.name.toLowerCase().includes(v)&&(papers(r.id)||0)>0)||rows.find(r=>r.name.toLowerCase().includes(v));
+  if(hit) centreOn(hit.id); else $("status").textContent="No friend called “"+$("find").value+"”.";
+}
+$("find").addEventListener("change",findGo);
+$("find").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();findGo();}});
+$("only").addEventListener("click",e=>{onlyCluster=!onlyCluster;e.currentTarget.setAttribute("aria-pressed",String(onlyCluster));highlight();});
+document.querySelectorAll(".tier").forEach(b=>b.addEventListener("click",()=>{
+  minL=+b.dataset.min;
+  document.querySelectorAll(".tier").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  if(sel&&!rows.some(r=>r.id===sel&&lvl(r)>=minL)) sel=null;
+  G=null; graphBuiltFor=""; refresh();
+}));
+$("lonely").addEventListener("click",e=>{hideLonely=!hideLonely;e.currentTarget.setAttribute("aria-pressed",String(hideLonely));buildGraph();});
+$("labels").addEventListener("click",e=>{allLabels=!allLabels;e.currentTarget.setAttribute("aria-pressed",String(allLabels));applyLabels();});
+$("reset").addEventListener("click",()=>{if(G)G.svg.transition().duration(300).call(G.zoom.transform,d3.zoomIdentity);select(null);});
+let rsz; addEventListener("resize",()=>{clearTimeout(rsz);rsz=setTimeout(()=>{if(G){const b=$("stage").getBoundingClientRect();G.svg.attr("viewBox",[-b.width/2,-b.height/2,b.width,b.height]);}},150);});
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>{if(G){buildGraph();}});
+
+/* ---------- data ---------- */
+let graphBuiltFor="";
+function refresh(){
+  renderList(); if(graph) fillNames();
+  const key=rows.filter(r=>lvl(r)>=minL).map(r=>r.id).sort().join(",")+"|"+minL+"|"+(graph?graph.built+graph.edges.length:"");
+  if(key!==graphBuiltFor&&graph&&rows.length){graphBuiltFor=key;buildGraph();}
+  else highlight();
+  if(sel) select(sel);
+}
+renderList();
+(async()=>{
+  db=await window.claude?.use?.("db");
+  if(!db){$("tally").textContent="Sign in to claude.ai to load the list.";$("gmeta").textContent="Sign in to claude.ai to load the graph.";return;}
+  const t=setTimeout(()=>{$("status").textContent="Still loading…";},10000);
+  db.collection("friends").onSnapshot(s=>{
+    clearTimeout(t); rows=s.docs.map(d=>({id:d.id,...d.data()})); refresh();
+  },e=>{clearTimeout(t);$("status").textContent="Could not load the list: "+(e&&e.message||"");});
+  db.doc("meta/graph").onSnapshot(s=>{ graph=s.exists?s.data():null; refresh(); },
+    e=>{$("gmeta").textContent="Could not load the graph: "+(e&&e.message||"");});
+})();
+</script>
