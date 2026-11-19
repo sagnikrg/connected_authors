@@ -60,6 +60,19 @@ h1{font-family:var(--display);font-weight:600;font-size:1.7rem;margin:0;text-wra
 .panel .w{font-variant-numeric:tabular-nums;color:var(--muted)}
 .pill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:999px;color:var(--on-accent)}
 .node{cursor:pointer}
+.hit{cursor:pointer}
+.plist{list-style:none;margin:0;padding:0;font-size:.82rem;display:flex;flex-direction:column;gap:8px}
+.plist li{display:flex;flex-direction:column;gap:1px;min-width:0}
+.plist a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px;overflow-wrap:anywhere}
+.plist a:hover{text-decoration-color:var(--fg)}
+.plist .pm{color:var(--muted);font-size:.74rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.plist .pm a{color:var(--muted)}
+.mini{all:unset;cursor:pointer;color:var(--muted);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+.mini:hover{color:var(--fg)}
+.panel ol .go{all:unset;cursor:pointer;margin-left:6px;font-size:.78rem;color:var(--muted)}
+.panel ol .go:hover{color:var(--fg)}
+details.pl summary{cursor:pointer;font-size:.82rem;color:var(--muted)}
+.ramp{display:inline-block;width:70px;height:10px;border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--core) 18%,var(--graph-bg)),var(--core))}
 .node text{font-family:var(--body);font-size:10px;fill:var(--fg);paint-order:stroke;stroke:var(--graph-bg);stroke-width:3px;pointer-events:none}
 
 /* list */
@@ -112,19 +125,21 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
         <button class="gbtn" id="only" type="button" aria-pressed="false" title="When someone is selected, hide everyone who is not their co-author">Only their cluster</button>
         <button class="gbtn" id="lonely" type="button" aria-pressed="false">Hide unlinked</button>
         <button class="gbtn" id="labels" type="button" aria-pressed="false">All names</button>
+        <button class="gbtn" id="recency" type="button" aria-pressed="true" title="Shade each bubble by the median year of their papers here (log scale: recent years spread out, old ones bunch together)">Recency shade</button>
         <button class="gbtn" id="reset" type="button">Reset view</button>
       </div>
       <div class="legend">
         <span><i class="dot" style="background:var(--core)"></i>Core</span>
         <span><i class="dot" style="background:var(--strong)"></i>Strong overlap</span>
         <span><i class="dot" style="background:var(--super)"></i>Superset</span>
+        <span id="rlegend">older <i class="ramp"></i> <span id="rnow">recent</span></span>
       </div>
       <div class="tip" id="tip" hidden></div>
     </div>
     <aside class="panel" id="panel" aria-live="polite">
       <h3>Pick someone</h3>
       <p class="meta" id="gmeta">Loading the graph…</p>
-      <p class="meta">Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear.</p>
+      <p class="meta">Click a bubble to see their co-authors and papers, click a link for the papers the two share. Drag bubbles, scroll or pinch to zoom, click empty space to clear.</p>
     </aside>
   </div>
 
@@ -144,7 +159,7 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
 </div>
 
 <script>
-let rows=[], q="", db=null, busy=new Set(), graph=null, sel=null;
+let rows=[], q="", db=null, busy=new Set(), graph=null, sel=null, selPair=null, PAP=[], recency=true;
 const $=id=>document.getElementById(id);
 const lvl=r=>typeof r.level==="number"?r.level:(r.core?2:0);
 const byId=()=>Object.fromEntries(rows.map(r=>[r.id,r]));
@@ -203,6 +218,16 @@ function showCard(id){
 /* ---------- graph ---------- */
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const colorOf=L=>L>=2?css("--core"):L===1?css("--strong"):css("--super");
+/* papers + recency: freshness 1 for this year, falling like log(1+age), so 30 vs 35 years ago look alike but 2026 vs 2024 do not */
+const NOW=new Date().getFullYear();
+let AMAX=40;
+const papersOf=id=>PAP.filter(p=>p.a.includes(id));
+const papersOfPair=(a,b)=>PAP.filter(p=>p.a.includes(a)&&p.a.includes(b));
+const byYear=(x,y)=>(+y.y||0)-(+x.y||0)||x.t.localeCompare(y.t);
+function medYear(id){const ys=papersOf(id).map(p=>+p.y).filter(Boolean).sort((a,b)=>a-b);if(!ys.length)return null;const m=ys.length>>1;return ys.length%2?ys[m]:Math.round((ys[m-1]+ys[m])/2);}
+const freshness=y=>y==null?null:1-Math.log1p(Math.max(0,NOW-y))/Math.log1p(AMAX);
+function fillOf(d,L){const c=colorOf(L);if(!recency||!PAP.length)return c;const f=freshness(d.my);return f==null?c:d3.interpolateRgb(css("--graph-bg"),c)(0.18+0.82*f);}
+function setPapers(list){PAP=list||[];const ys=PAP.map(p=>+p.y).filter(Boolean);AMAX=ys.length?Math.max(10,NOW-Math.min(...ys)):40;}
 let G=null; // {sim, nodeSel, linkSel, nodes, links, zoom, svgSel, gSel}
 let hideLonely=false, allLabels=false, minL=0, onlyCluster=false;
 const rad=p=>p>0?4+3.2*Math.sqrt(p):3;
@@ -214,7 +239,7 @@ function buildGraph(){
   const inTier=new Set(rows.filter(r=>lvl(r)>=minL).map(r=>r.id));
   const deg={}; for(const [a,b] of graph.edges){ if(inTier.has(a)&&inTier.has(b)){deg[a]=(deg[a]||0)+1;deg[b]=(deg[b]||0)+1;} }
   const nodes=rows.filter(r=>inTier.has(r.id)&&(graph.nodes[r.id]||0)>0&&(!hideLonely||deg[r.id])).map(r=>{
-    const o=prev[r.id]||{}; return {id:r.id,name:r.name,p:graph.nodes[r.id]||0,x:o.x,y:o.y,vx:o.vx,vy:o.vy};
+    const o=prev[r.id]||{}; return {id:r.id,name:r.name,p:graph.nodes[r.id]||0,my:medYear(r.id),x:o.x,y:o.y,vx:o.vx,vy:o.vy};
   });
   const ids=new Set(nodes.map(n=>n.id));
   const links=graph.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w}));
@@ -224,8 +249,12 @@ function buildGraph(){
   const g=svg.append("g");
   const link=g.append("g").attr("stroke",css("--edge")).attr("stroke-linecap","round").selectAll("line").data(links).join("line")
     .attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",0.45);
+  const hit=g.append("g").attr("stroke","transparent").selectAll("line").data(links).join("line").attr("class","hit")
+    .attr("stroke-width",d=>Math.max(12,4+1.6*d.w))
+    .on("click",(e,d)=>{e.stopPropagation();selectPair(d.source.id,d.target.id);})
+    .on("mouseenter",(e,d)=>tipLink(e,d)).on("mousemove",(e,d)=>tipLink(e,d)).on("mouseleave",()=>{$("tip").hidden=true;});
   const node=g.append("g").selectAll("g").data(nodes,d=>d.id).join("g").attr("class","node");
-  node.append("circle").attr("r",d=>rad(d.p)).attr("fill",d=>colorOf(lvl(R[d.id]||{}))).attr("stroke",css("--graph-bg")).attr("stroke-width",1.5);
+  node.append("circle").attr("r",d=>rad(d.p)).attr("fill",d=>fillOf(d,lvl(R[d.id]||{}))).attr("stroke",css("--graph-bg")).attr("stroke-width",1.5);
   node.append("text").attr("dy",d=>-rad(d.p)-4).attr("text-anchor","middle").text(d=>d.name);
   const sim=d3.forceSimulation(nodes)
     .force("link",d3.forceLink(links).id(d=>d.id).distance(d=>rad(d.source.p)+rad(d.target.p)+150/Math.sqrt(d.w)).strength(d=>Math.min(0.8,0.15+0.08*d.w)))
@@ -233,6 +262,7 @@ function buildGraph(){
     .force("collide",d3.forceCollide(d=>rad(d.p)+10))
     .force("x",d3.forceX(0).strength(0.025)).force("y",d3.forceY(0).strength(0.035))
     .on("tick",()=>{
+      hit.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
       link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
       node.attr("transform",d=>`translate(${d.x},${d.y})`);
     });
@@ -270,7 +300,15 @@ function applyLabels(){
 function highlight(){
   if(!G)return;
   const R=byId();
-  G.node.select("circle").attr("fill",d=>colorOf(lvl(R[d.id]||{})));
+  G.node.select("circle").attr("fill",d=>fillOf(d,lvl(R[d.id]||{})));
+  $("rlegend").hidden=!(recency&&PAP.length); $("rnow").textContent=String(NOW);
+  if(selPair){
+    const [a,b]=selPair, on=d=>(d.source.id===a&&d.target.id===b)||(d.source.id===b&&d.target.id===a);
+    G.node.attr("display",null).attr("opacity",d=>d.id===a||d.id===b?1:0.15);
+    G.link.attr("display",null).attr("stroke-opacity",d=>on(d)?0.95:0.05).attr("stroke",d=>on(d)?css("--fg"):css("--edge"));
+    G.node.select("text").attr("display",d=>d.id===a||d.id===b?null:"none");
+    return;
+  }
   if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("stroke-opacity",0.45).attr("stroke",css("--edge")).attr("display",null);applyLabels();return;}
   const nb=new Set([sel,...neighbours(sel).map(x=>x[0])]);
   const touches=d=>d.source.id===sel||d.target.id===sel;
@@ -288,7 +326,7 @@ function highlight(){
 function tipShow(e,d){
   const t=$("tip"), s=$("stage").getBoundingClientRect(), nb=neighbours(d.id), R=byId();
   t.innerHTML=""; const b=document.createElement("b"); b.textContent=d.name; t.append(b);
-  const l=document.createElement("div"); l.textContent=`${d.p} paper${d.p===1?"":"s"} · ${nb.length} co-author${nb.length===1?"":"s"} here`;
+  const l=document.createElement("div"); l.textContent=`${d.p} paper${d.p===1?"":"s"} · ${nb.length} co-author${nb.length===1?"":"s"} here`+(d.my?` · median year ${d.my}`:"");
   t.append(l);
   if(nb.length){const m=document.createElement("div");m.style.color="var(--muted)";m.textContent="Most with "+nb.slice(0,3).map(([id,w])=>(R[id]?.name||id)+" ("+w+")").join(", ");t.append(m);}
   t.hidden=false;
@@ -296,13 +334,56 @@ function tipShow(e,d){
   if(x+250>s.width)x=e.clientX-s.left-250; if(y+90>s.height)y=e.clientY-s.top-90;
   t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
 }
+function tipLink(e,d){
+  const t=$("tip"), s=$("stage").getBoundingClientRect(), R=byId();
+  t.innerHTML=""; const b=document.createElement("b"); b.textContent=(R[d.source.id]?.name||d.source.id)+" & "+(R[d.target.id]?.name||d.target.id); t.append(b);
+  const l=document.createElement("div"); l.textContent=`${d.w} shared paper${d.w===1?"":"s"} · click for the list`; t.append(l);
+  t.hidden=false;
+  let x=e.clientX-s.left+12, y=e.clientY-s.top+12;
+  if(x+250>s.width)x=e.clientX-s.left-250; if(y+70>s.height)y=e.clientY-s.top-70;
+  t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
+}
+/* paper rows: the title opens the Dropbox copy (a web page may not open local files), "copy path" gives the local path for Explorer */
+const DROP="C:\\Users\\Ritam\\Dropbox\\";
+const localPath=f=>DROP+f.split("/").join("\\");
+function dropboxUrl(f){const i=f.lastIndexOf("/");return "https://www.dropbox.com/home/"+f.slice(0,i).split("/").map(encodeURIComponent).join("/")+"?preview="+encodeURIComponent(f.slice(i+1));}
+async function copyText(txt,btn){
+  let ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true;}catch(e){}
+  if(!ok){try{const ta=document.createElement("textarea");ta.value=txt;ta.style.position="fixed";ta.style.opacity="0";document.body.append(ta);ta.select();ok=document.execCommand("copy");ta.remove();}catch(e){}}
+  const o=btn.textContent; btn.textContent=ok?"copied":"copy failed"; setTimeout(()=>{btn.textContent=o;},1400);
+  if(!ok){try{prompt("Local path:",txt);}catch(e){}}
+}
+function paperList(list){
+  const ul=document.createElement("ul"); ul.className="plist";
+  for(const p of list.slice().sort(byYear)){
+    const li=document.createElement("li");
+    const a=document.createElement("a"); a.href=dropboxUrl(p.f); a.target="_blank"; a.rel="noopener"; a.textContent=p.t; a.title="Open the copy in Dropbox: "+p.f;
+    const m=document.createElement("div"); m.className="pm";
+    if(p.y) m.append(Object.assign(document.createElement("span"),{textContent:p.y}));
+    const c=document.createElement("button"); c.type="button"; c.className="mini"; c.textContent="copy path"; c.title=localPath(p.f);
+    c.addEventListener("click",()=>copyText(localPath(p.f),c)); m.append(c);
+    if(p.u){const o=document.createElement("a");o.href=p.u;o.target="_blank";o.rel="noopener";o.textContent=p.u.includes("arxiv")?"arXiv":"journal";m.append(o);}
+    li.append(a,m); ul.append(li);
+  }
+  return ul;
+}
+function selectPair(a,b){
+  sel=null; selPair=[a,b]; highlight();
+  const R=byId(), P=$("panel"), list=papersOfPair(a,b); P.replaceChildren();
+  const h=document.createElement("h3"); h.textContent=(R[a]?.name||a)+" & "+(R[b]?.name||b);
+  const m=document.createElement("p"); m.className="meta"; m.textContent=`${list.length} shared paper${list.length===1?"":"s"} in the collection`;
+  const nav=document.createElement("div"); nav.className="toggles";
+  for(const id of [a,b]){const x=document.createElement("button");x.type="button";x.className="gbtn";x.textContent="→ "+(R[id]?.name||id);x.addEventListener("click",()=>select(id));nav.append(x);}
+  P.append(h,m,paperList(list),nav);
+}
 function select(id){
-  sel=id; highlight();
+  sel=id; selPair=null; highlight();
   const P=$("panel"); P.replaceChildren();
   if(!id){
     P.append(Object.assign(document.createElement("h3"),{textContent:"Pick someone"}),
       Object.assign(document.createElement("p"),{className:"meta",textContent:$("gmeta")?.textContent||""}),
-      Object.assign(document.createElement("p"),{className:"meta",textContent:"Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear."}));
+      Object.assign(document.createElement("p"),{className:"meta",textContent:"Click a bubble to see their co-authors and papers, click a link for the papers the two share. Drag bubbles, scroll or pinch to zoom, click empty space to clear."}));
     const gm=P.querySelector(".meta"); gm.id="gmeta";
     if(G) gm.textContent=`${G.nodes.length} people with papers, ${G.links.length} co-author links, from ${graph.papers} PDFs (built ${graph.built}).`;
     return;
@@ -312,19 +393,23 @@ function select(id){
   const pill=document.createElement("span"); pill.className="pill"; pill.style.background=colorOf(L);
   pill.textContent=L>=2?"Core":L===1?"Strong overlap":"Superset";
   const m=document.createElement("p"); m.className="meta";
-  m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${r?.folder?" · MIPT/"+r.folder:""}`;
+  const my=medYear(id); m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${my?" · median year "+my:""}${r?.folder?" · MIPT/"+r.folder:""}`;
   P.append(h,pill,m);
   if(nb.length){
-    const s=document.createElement("p"); s.className="meta"; s.textContent="Co-authors in the collection (shared papers):";
+    const s=document.createElement("p"); s.className="meta"; s.textContent="Co-authors in the collection (shared papers). Click a name for the shared papers, → to go to them:";
     const ol=document.createElement("ol");
     for(const [nid,w] of nb){
       const li=document.createElement("li"); const b=document.createElement("button"); b.type="button";
-      b.textContent=R[nid]?.name||nid; b.addEventListener("click",()=>select(nid));
+      b.textContent=R[nid]?.name||nid; b.title="Show the papers they share"; b.addEventListener("click",()=>selectPair(id,nid));
       const sp=document.createElement("span"); sp.className="w"; sp.textContent=" "+w;
-      li.append(b,sp); ol.append(li);
+      const go=document.createElement("button"); go.type="button"; go.className="go"; go.textContent="→"; go.title="Go to "+(R[nid]?.name||nid); go.setAttribute("aria-label","Go to "+(R[nid]?.name||nid));
+      go.addEventListener("click",()=>select(nid));
+      li.append(b,sp,go); ol.append(li);
     }
     P.append(s,ol);
   } else P.append(Object.assign(document.createElement("p"),{className:"meta",textContent:"No co-authored papers with other friends in the collection."}));
+  const mine=papersOf(id);
+  if(mine.length){const dt=document.createElement("details");dt.className="pl";const su=document.createElement("summary");su.textContent=`Their papers (${mine.length})`;dt.append(su,paperList(mine));P.append(dt);}
   const go=document.createElement("button"); go.type="button"; go.className="gbtn"; go.textContent="Show card below";
   go.addEventListener("click",()=>showCard(id)); P.append(go);
 }
@@ -365,6 +450,7 @@ document.querySelectorAll(".tier").forEach(b=>b.addEventListener("click",()=>{
 }));
 $("lonely").addEventListener("click",e=>{hideLonely=!hideLonely;e.currentTarget.setAttribute("aria-pressed",String(hideLonely));buildGraph();});
 $("labels").addEventListener("click",e=>{allLabels=!allLabels;e.currentTarget.setAttribute("aria-pressed",String(allLabels));applyLabels();});
+$("recency").addEventListener("click",e=>{recency=!recency;e.currentTarget.setAttribute("aria-pressed",String(recency));highlight();});
 $("reset").addEventListener("click",()=>{if(G)G.svg.transition().duration(300).call(G.zoom.transform,d3.zoomIdentity);select(null);});
 let rsz; addEventListener("resize",()=>{clearTimeout(rsz);rsz=setTimeout(()=>{if(G){const b=$("stage").getBoundingClientRect();G.svg.attr("viewBox",[-b.width/2,-b.height/2,b.width,b.height]);}},150);});
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>{if(G){buildGraph();}});
@@ -376,7 +462,7 @@ function refresh(){
   const key=rows.filter(r=>lvl(r)>=minL).map(r=>r.id).sort().join(",")+"|"+minL+"|"+(graph?graph.built+graph.edges.length:"");
   if(key!==graphBuiltFor&&graph&&rows.length){graphBuiltFor=key;buildGraph();}
   else highlight();
-  if(sel) select(sel);
+  if(selPair) selectPair(...selPair); else if(sel) select(sel);
 }
 renderList();
 (async()=>{
@@ -386,6 +472,7 @@ renderList();
   db.collection("friends").onSnapshot(s=>{
     clearTimeout(t); rows=s.docs.map(d=>({id:d.id,...d.data()})); refresh();
   },e=>{clearTimeout(t);$("status").textContent="Could not load the list: "+(e&&e.message||"");});
+  db.doc("meta/papers").onSnapshot(s=>{ setPapers(s.exists?s.data().papers:[]); G=null; graphBuiltFor=""; refresh(); },()=>{});
   db.doc("meta/graph").onSnapshot(s=>{ graph=s.exists?s.data():null; refresh(); },
     e=>{$("gmeta").textContent="Could not load the graph: "+(e&&e.message||"");});
 })();

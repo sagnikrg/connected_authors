@@ -27,7 +27,7 @@ for f in glob.glob(BIB+'/*.bib'):
             else: p=x.split(); l,fi=(p[-1],' '.join(p[:-1])) if p else ('','')
             au.append(key(l,fi))
         yr=(re.search(r'(?:year|date)\s*=\s*[{"]?(\d{4})',b) or [None,''])[1]
-        ent.append(dict(yr=yr,doi=g('doi').lower(),ep=re.sub(r'v\d+$','',g('eprint').lower()),t=set(w for w in re.findall(r'[a-z0-9]+',A(t.group(1) if t else '').lower()) if len(w)>3),au=au))
+        ent.append(dict(title=' '.join(re.sub(r'[{}\\]','',t.group(1)).split()) if t else '',yr=yr,doi=g('doi').lower(),ep=re.sub(r'v\d+$','',g('eprint').lower()),t=set(w for w in re.findall(r'[a-z0-9]+',A(t.group(1) if t else '').lower()) if len(w)>3),au=au))
 import collections as _c
 _y=_c.defaultdict(str)
 for e in ent:
@@ -48,7 +48,10 @@ def fromtext(t):
         mm=re.search(pat,A(head))
         if mm: found.append((mm.start(),n))
     return [l for _,l in sorted(found)]
-rows=[]
+rows=[]; META={}
+def ftitle(f):
+    x=re.sub(r'\.pdf$','',f,flags=re.I); x=re.sub(r'(?:arXiv:)?\d{4}\.\d{4,5}(v\d+)?','',x); x=re.sub(r'Phys[A-Za-z]*\.\d+\.\w+','',x)
+    x=re.sub(r'[_]+',' ',x); x=re.sub(r'^[\s\-.,]+|[\s\-.,]+$','',x); return ' '.join(x.split()) or f
 for R in ROOTS:
     for dp,_,fs in os.walk(R):
         for f in fs:
@@ -95,7 +98,10 @@ for R in ROOTS:
                 else:
                     m3=re.search(r'(?<!\d)(19[5-9]\d|20[0-2]\d)(?!\d)',f)
                     year=m3.group(1) if m3 else ''
-            rows.append((os.path.relpath(p,os.path.dirname(R)),how,'|'.join(tags),year))
+            rel=os.path.relpath(p,os.path.dirname(R))
+            link=('https://doi.org/'+e['doi']) if e and e['doi'] else ('https://arxiv.org/abs/'+e['ep']) if e and e['ep'] else ('https://arxiv.org/abs/'+ids[0]) if ids and re.search(re.escape(ids[0]),f) else ''
+            META[rel]=((e['title'] if e and e['title'] else ftitle(f)),link)
+            rows.append((rel,how,'|'.join(tags),year))
 with open(S+'/papers.csv','w',newline='',encoding='utf8') as fh: csv.writer(fh).writerows(rows)
 import collections
 rows=[r for r in rows];print(len(rows),collections.Counter(r[1] for r in rows),'tagged:',sum(1 for r in rows if r[2]))
@@ -113,4 +119,12 @@ g={"nodes":{k:cnt.get(k,0) for k in slug.values()},"edges":[[a,b,w] for (a,b),w 
    "papers":sum(1 for r in rows if not r[0].startswith('#')),"built":datetime.date.today().isoformat(),
    "source":"Dropbox/MIPT + Dropbox/Quantum circuit"}
 json.dump(g,open(S+'/graph.json','w',encoding='utf8'))
+# per-paper list for the paper lists in the graph pages: t title, y year, f file (relative to Dropbox), a friend slugs, u link
+PL=[]
+for r in rows:
+    if r[0].startswith('#') or not r[2]: continue
+    ids_=sorted(set(slug[n] for n in r[2].split('|') if n in slug))
+    if ids_: PL.append({"t":META[r[0]][0],"y":r[3],"f":r[0].replace(os.sep,"/"),"a":ids_,"u":META[r[0]][1]})
+json.dump({"papers":PL,"built":g['built']},open(S+'/papers.json','w',encoding='utf8'),ensure_ascii=False)
+print('paper list',len(PL))
 print('nodes',len(g['nodes']),'edges',len(g['edges']),'max edge',max((e[2] for e in g['edges']),default=0))
