@@ -57,6 +57,13 @@ h1{font-family:var(--display);font-weight:600;font-size:1.6rem;margin:0;text-wra
 details.pl summary{cursor:pointer;font-size:.82rem;color:var(--muted)}
 .prow{display:flex;gap:6px;flex-wrap:wrap}
 .ramp{display:inline-block;width:60px;height:9px;border-radius:5px;vertical-align:middle;margin:0 4px;background:linear-gradient(90deg,color-mix(in srgb,var(--node) 18%,var(--graph-bg)),var(--node))}
+
+/* topic chips (paper lists only) */
+:root{--t-dtc:#b5482a; --t-mbleth:#3b6fb6; --t-experiment:#8a6500; --t-majorana:#7b4bb0; --t-pisg:#a8336b; --t-scar:#2e7d4f; --t-sff:#5f6b7a;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--t-dtc:#f0a07c; --t-mbleth:#8cb4ea; --t-experiment:#e0c060; --t-majorana:#c3a2ec; --t-pisg:#ec9cc4; --t-scar:#86d3a5; --t-sff:#b4bfcc;}}
+:root[data-theme="dark"]{--t-dtc:#f0a07c; --t-mbleth:#8cb4ea; --t-experiment:#e0c060; --t-majorana:#c3a2ec; --t-pisg:#ec9cc4; --t-scar:#86d3a5; --t-sff:#b4bfcc;}
+.chips{display:inline-flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:.68rem;font-weight:600;line-height:1.35;padding:0 6px;border-radius:999px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
 </style>
 
 <div class="wrap">
@@ -197,6 +204,11 @@ function tipLink(e,d){
   if(x+250>s.width)x=e.clientX-s.left-250; if(y+70>s.height)y=e.clientY-s.top-70;
   t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
 }
+
+const TOPICS=["dtc","pi-SG","mbl-eth","scar","majorana","SFF","experiment"];
+function chips(k){const s=document.createElement("span");s.className="chips";
+  for(const t of TOPICS.filter(x=>(k||[]).includes(x))){const c=document.createElement("span");c.className="chip";c.textContent=t;c.style.setProperty("--c","var(--t-"+t.replace("-","").toLowerCase()+")");s.append(c);}
+  return s;}
 function paperList(list){
   const ul=document.createElement("ul"); ul.className="plist";
   for(const p of list.slice().sort(byYear)){
@@ -205,7 +217,8 @@ function paperList(list){
     else a=document.createElement("span");
     a.textContent=p.t; li.append(a);
     const m=document.createElement("span"); m.className="pm"; m.textContent=[p.y,p.u?(p.u.includes("arxiv")?"arXiv":"journal"):""].filter(Boolean).join(" · ");
-    if(m.textContent) li.append(m);
+    if(m.textContent||(p.k&&p.k.length)){const row=document.createElement("span");row.className="pm";row.style.display="flex";row.style.gap="6px";row.style.flexWrap="wrap";row.style.alignItems="center";
+      if(m.textContent) row.append(m); if(p.k&&p.k.length) row.append(chips(p.k)); li.append(row);}
     ul.append(li);
   }
   return ul;

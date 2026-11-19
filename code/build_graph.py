@@ -119,12 +119,13 @@ g={"nodes":{k:cnt.get(k,0) for k in slug.values()},"edges":[[a,b,w] for (a,b),w 
    "papers":sum(1 for r in rows if not r[0].startswith('#')),"built":datetime.date.today().isoformat(),
    "source":"Dropbox/MIPT + Dropbox/Quantum circuit"}
 json.dump(g,open(S+'/graph.json','w',encoding='utf8'))
-# per-paper list for the paper lists in the graph pages: t title, y year, f file (relative to Dropbox), a friend slugs, u link
+# per-paper list for the paper lists in the graph pages: t title, y year, f file (relative to Dropbox), a friend slugs, u link, k topic labels
+TOP=json.load(open(S+'/topics.json',encoding='utf8')) if os.path.exists(S+'/topics.json') else {}  # topic labels, data/topics.json (code/topics.py + topics_fix.py)
 PL=[]
 for r in rows:
     if r[0].startswith('#') or not r[2]: continue
     ids_=sorted(set(slug[n] for n in r[2].split('|') if n in slug))
-    if ids_: PL.append({"t":META[r[0]][0],"y":r[3],"f":r[0].replace(os.sep,"/"),"a":ids_,"u":META[r[0]][1]})
+    if ids_: PL.append({"t":META[r[0]][0],"y":r[3],"f":r[0].replace(os.sep,"/"),"a":ids_,"u":META[r[0]][1],"k":TOP.get(r[0].replace(os.sep,"/"),[])})
 json.dump({"papers":PL,"built":g['built']},open(S+'/papers.json','w',encoding='utf8'),ensure_ascii=False)
 print('paper list',len(PL))
 print('nodes',len(g['nodes']),'edges',len(g['edges']),'max edge',max((e[2] for e in g['edges']),default=0))

@@ -22,7 +22,7 @@ data={"people":people,"edges":g['edges'],"papers":g['papers'],"built":g['built']
 # per-paper list for the paper lists and the recency shade; public, so no local file paths
 pj=os.path.join(D,'papers.json')
 if os.path.exists(pj):
-    data["list"]=[{"t":p["t"],"y":p["y"],"a":[x for x in p["a"] if x in names],"u":p["u"]} for p in json.load(open(pj,encoding='utf8'))["papers"]]
+    data["list"]=[{"t":p["t"],"y":p["y"],"a":[x for x in p["a"] if x in names],"u":p["u"],"k":p.get("k",[])} for p in json.load(open(pj,encoding='utf8'))["papers"]]
 html=open(tpl,encoding='utf8').read().replace('/*DATA*/null',json.dumps(data,ensure_ascii=False).replace('</','<\\/'))
 if standalone:
     i=min(x for x in (html.find('<div class="wrap">'),html.find('<div class="stage"')) if x>=0)

@@ -103,6 +103,13 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
 .t[disabled]{cursor:progress;opacity:.6}
 .empty{color:var(--muted);padding:20px;border:1px dashed var(--line);border-radius:8px;text-align:center}
 @media (prefers-reduced-motion:no-preference){.card,.t{transition:background .12s,border-color .12s,color .12s}}
+
+/* topic chips (paper lists only) */
+:root{--t-dtc:#b5482a; --t-mbleth:#3b6fb6; --t-experiment:#8a6500; --t-majorana:#7b4bb0; --t-pisg:#a8336b; --t-scar:#2e7d4f; --t-sff:#5f6b7a;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--t-dtc:#f0a07c; --t-mbleth:#8cb4ea; --t-experiment:#e0c060; --t-majorana:#c3a2ec; --t-pisg:#ec9cc4; --t-scar:#86d3a5; --t-sff:#b4bfcc;}}
+:root[data-theme="dark"]{--t-dtc:#f0a07c; --t-mbleth:#8cb4ea; --t-experiment:#e0c060; --t-majorana:#c3a2ec; --t-pisg:#ec9cc4; --t-scar:#86d3a5; --t-sff:#b4bfcc;}
+.chips{display:inline-flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:.68rem;font-weight:600;line-height:1.35;padding:0 6px;border-radius:999px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
 </style>
 
 <div class="wrap">
@@ -356,6 +363,11 @@ async function copyText(txt,btn){
   const o=btn.textContent; btn.textContent=ok?"copied":"copy failed"; setTimeout(()=>{btn.textContent=o;},1400);
   if(!ok){try{prompt("Local path:",txt);}catch(e){}}
 }
+
+const TOPICS=["dtc","pi-SG","mbl-eth","scar","majorana","SFF","experiment"];
+function chips(k){const s=document.createElement("span");s.className="chips";
+  for(const t of TOPICS.filter(x=>(k||[]).includes(x))){const c=document.createElement("span");c.className="chip";c.textContent=t;c.style.setProperty("--c","var(--t-"+t.replace("-","").toLowerCase()+")");s.append(c);}
+  return s;}
 function paperList(list){
   const ul=document.createElement("ul"); ul.className="plist";
   for(const p of list.slice().sort(byYear)){
@@ -367,6 +379,7 @@ function paperList(list){
     }); a.title="Open the local copy in a Firefox tab: "+p.f;
     const m=document.createElement("div"); m.className="pm";
     if(p.y) m.append(Object.assign(document.createElement("span"),{textContent:p.y}));
+    if(p.k&&p.k.length) m.append(chips(p.k));
     const c=document.createElement("button"); c.type="button"; c.className="mini"; c.textContent="copy path"; c.title=localPath(p.f);
     c.addEventListener("click",()=>copyText(localPath(p.f),c)); m.append(c);
     const dbx=document.createElement("a"); dbx.href=dropboxUrl(p.f); dbx.target="_blank"; dbx.rel="noopener"; dbx.textContent="Dropbox"; m.append(dbx);
