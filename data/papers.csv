@@ -59,7 +59,7 @@ MIPT\David\Metastability\PhysRevB.95.155129_Stability and instability towards de
 MIPT\David\Metastability\PhysRevLett.119.150602_How a Small Quantum Bath Can Thermalize Long Localized Chains [Luitz De Roeck 2017 mbl-eth].pdf,doi,David J. Luitz|Wojciech De Roeck,2017
 MIPT\David\Operator Growth - MBL\PhysRevB.95.094206_Operator entanglement entropy of the time evolution operator in chaotic systems [Luitz 2017 mbl-eth].pdf,doi,Tianci Zhou|David J. Luitz,2017
 MIPT\David\Operator Growth - MBL\PhysRevResearch.1.033067_Power-law entanglement growth from typical product states [Luitz 2019 mbl-eth].pdf,doi,David J. Luitz,2019
-MIPT\David Dominic\2207.14313_Quantum many-body Jarzynski equality and dissipative noise on a digital quantum computer [Hahn Luitz 2022 mbl-eth].pdf,text,Dominik Hahn|David J. Luitz,2022
+MIPT\David Dominic\2207.14313_Quantum many-body Jarzynski equality and dissipative noise on a digital quantum computer [Hahn Luitz 2022 mbl-eth].pdf,arxiv,Dominik Hahn|David J. Luitz,2023
 MIPT\David Dominic\Quantum Phase Estimation Algorithms_PhysRevLett.83.5162.pdf,physrev,,1999
 MIPT\De Luca\PhysRevX.12.031037_DTC confinement domain walls.pdf,doi,,2022
 MIPT\Deepak\PhysRevE.55.R2093_Distribution of sizes of erased loops for loop-erased random walks [Dhar 1997].pdf,title,Deepak Dhar,1997
@@ -71,12 +71,12 @@ MIPT\Deepak\Random Locally Tree Like\2110.02928_Finite-size scaling functions of
 MIPT\Deepak\Random Locally Tree Like\Thesis [Dhar].pdf,text,Deepak Dhar,
 MIPT\Dibyendu Roy\PhysRevE.102.060202_Random matrix spectral form factor in kicked interacting fermionic chains [Roy Prosen 2020 SFF mbl-eth].pdf,doi,Dibyendu Roy|Tomaž Prosen,2020
 MIPT\DMRG in the age of MPS\1008.3477_DMRG in the age of MPS.pdf,arxiv,,2011
-"MIPT\Dominik\2309.12982v1_Eigenstate correlations, the eigenstate thermalization hypothesis, and quantum information dynamics in chaotic many-body quantum systems [Hahn Luitz Chalker 2023 mbl-eth].pdf",text,Dominik Hahn|David J. Luitz|John Chalker,2023
-MIPT\Dominik\2504.01073_Predicting Dynamics from Flows of the Eigenstate Thermalization Hypothesis [Hahn Chandran 2025 mbl-eth].pdf,text,Dominik Hahn|Anushya Chandran,2025
-MIPT\Dominik\2505.22816_Towards Efficient Quantum Thermal State Preparation via Local Driving - Lindbladian Simulation with Provable Guarantees [Hahn Parameswaran 2025].pdf,text,Dominik Hahn|Sid Parameswaran,2025
-MIPT\Dominik\2506.04321_Efficient Quantum Gibbs Sampling with Local Circuits [Hahn 2025].pdf,text,Dominik Hahn,2025
+"MIPT\Dominik\2309.12982v1_Eigenstate correlations, the eigenstate thermalization hypothesis, and quantum information dynamics in chaotic many-body quantum systems [Hahn Luitz Chalker 2023 mbl-eth].pdf",arxiv,Dominik Hahn|David J. Luitz|John Chalker,2024
+MIPT\Dominik\2504.01073_Predicting Dynamics from Flows of the Eigenstate Thermalization Hypothesis [Hahn Chandran 2025 mbl-eth].pdf,arxiv,Dominik Hahn|Anushya Chandran,2026
+MIPT\Dominik\2505.22816_Towards Efficient Quantum Thermal State Preparation via Local Driving - Lindbladian Simulation with Provable Guarantees [Hahn Parameswaran 2025].pdf,arxiv,Dominik Hahn|Sid Parameswaran,2026
+MIPT\Dominik\2506.04321_Efficient Quantum Gibbs Sampling with Local Circuits [Hahn 2025].pdf,arxiv,Dominik Hahn,2026
 "MIPT\Dominik\2510.02198v1_Chaotic many-body quantum dynamics, spectral correlations, and energy diffusion [Chalker Hahn 2026 mbl-eth].pdf",arxiv,John Chalker|Dominik Hahn,2026
-MIPT\Dominik\2605.03011_Rigorous error bounds for dissipative thermal state preparation from weak system-bath coupling [Parameswaran Hahn 2026].pdf,text,Sid Parameswaran|Dominik Hahn,2026
+MIPT\Dominik\2605.03011_Rigorous error bounds for dissipative thermal state preparation from weak system-bath coupling [Parameswaran Hahn 2026].pdf,arxiv,Sid Parameswaran|Dominik Hahn,2026
 MIPT\Dominik\PhysRevB.109.094207_Absence of localization in weakly interacting Floquet circuits [Hahn Colmenarez 2024 mbl-eth].pdf,doi,Dominik Hahn|Luis Colmenarez,2024
 MIPT\Dries Sels\2403.16718v1-Unveiling clean two-dimensional discrete time quasicrystals on a digital quantum computer.pdf,arxiv,,2026
 #REJECT MIPT\Dries Sels\Markovian baths and quantum avalanches_Dries [Sels 2021 mbl-eth].pdf,arxiv,0.57

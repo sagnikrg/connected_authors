@@ -69,6 +69,11 @@ h1{font-family:var(--display);font-weight:600;font-size:1.7rem;margin:0;text-wra
 .plist .pm a{color:var(--muted)}
 .mini{all:unset;cursor:pointer;color:var(--muted);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
 .mini:hover{color:var(--fg)}
+.bkey{all:unset;cursor:pointer;align-self:flex-start;font-family:var(--mono);font-size:.72rem;color:var(--core);overflow-wrap:anywhere}
+.bkey:hover{text-decoration:underline}
+.bkey:focus-visible{outline:2px solid var(--core);outline-offset:2px}
+.bkey.none{cursor:default;color:var(--muted);font-style:italic}
+.bkey.none:hover{text-decoration:none}
 .panel ol .go{all:unset;cursor:pointer;margin-left:6px;font-size:.78rem;color:var(--muted)}
 .panel ol .go:hover{color:var(--fg)}
 details.pl summary{cursor:pointer;font-size:.82rem;color:var(--muted)}
@@ -384,6 +389,10 @@ function paperList(list){
     c.addEventListener("click",()=>copyText(localPath(p.f),c)); m.append(c);
     const dbx=document.createElement("a"); dbx.href=dropboxUrl(p.f); dbx.target="_blank"; dbx.rel="noopener"; dbx.textContent="Dropbox"; m.append(dbx);
     if(p.u){const o=document.createElement("a");o.href=p.u;o.target="_blank";o.rel="noopener";o.textContent=p.u.includes("arxiv")?"arXiv":"journal";m.append(o);}
+    if(p.b){ // bib key used in the thesis; click copies \cite{key}
+      const kb=document.createElement("button"); kb.type="button"; kb.className="bkey"; kb.textContent=p.b; kb.title="Copy \\cite{"+p.b+"}";
+      kb.addEventListener("click",()=>copyText("\\cite{"+p.b+"}",kb)); li.append(kb);
+    } else li.append(Object.assign(document.createElement("span"),{className:"bkey none",textContent:"no bib entry"}));
     li.append(a,m); ul.append(li);
   }
   return ul;

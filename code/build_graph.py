@@ -15,8 +15,8 @@ def key(last,first): return (re.sub('[^a-z]','',A(last).lower()),(re.sub('[^A-Za
 # bib index
 ent=[]
 for f in glob.glob(BIB+'/*.bib'):
-    for m in re.finditer(r'@\w+\s*\{[^,]+,(.*?)(?=\n@|\Z)',open(f,encoding='utf8',errors='ignore').read(),re.S):
-        b=m.group(1)
+    for m in re.finditer(r'@\w+\s*\{([^,]+),(.*?)(?=\n@|\Z)',open(f,encoding='utf8',errors='ignore').read(),re.S):
+        bkey,b=m.group(1).strip(),m.group(2)
         am=re.search(r'\bauthor\s*=\s*\{((?:[^{}]|\{[^{}]*\})*)\}',b,re.S)
         if not am: continue
         g=lambda k:(re.search(r'\b'+k+r'\s*=\s*[{"]([^}"]*)',b) or [None,''])[1]
@@ -27,7 +27,7 @@ for f in glob.glob(BIB+'/*.bib'):
             else: p=x.split(); l,fi=(p[-1],' '.join(p[:-1])) if p else ('','')
             au.append(key(l,fi))
         yr=(re.search(r'(?:year|date)\s*=\s*[{"]?(\d{4})',b) or [None,''])[1]
-        ent.append(dict(title=' '.join(re.sub(r'[{}\\]','',t.group(1)).split()) if t else '',yr=yr,doi=g('doi').lower(),ep=re.sub(r'v\d+$','',g('eprint').lower()),t=set(w for w in re.findall(r'[a-z0-9]+',A(t.group(1) if t else '').lower()) if len(w)>3),au=au))
+        ent.append(dict(key=bkey,title=' '.join(re.sub(r'[{}\\]','',t.group(1)).split()) if t else '',yr=yr,doi=g('doi').lower(),ep=re.sub(r'v\d+$','',g('eprint').lower()),t=set(w for w in re.findall(r'[a-z0-9]+',A(t.group(1) if t else '').lower()) if len(w)>3),au=au))
 import collections as _c
 _y=_c.defaultdict(str)
 for e in ent:
@@ -100,7 +100,7 @@ for R in ROOTS:
                     year=m3.group(1) if m3 else ''
             rel=os.path.relpath(p,os.path.dirname(R))
             link=('https://doi.org/'+e['doi']) if e and e['doi'] else ('https://arxiv.org/abs/'+e['ep']) if e and e['ep'] else ('https://arxiv.org/abs/'+ids[0]) if ids and re.search(re.escape(ids[0]),f) else ''
-            META[rel]=((e['title'] if e and e['title'] else ftitle(f)),link)
+            META[rel]=((e['title'] if e and e['title'] else ftitle(f)),link,(e['key'] if e else ''))
             rows.append((rel,how,'|'.join(tags),year))
 with open(S+'/papers.csv','w',newline='',encoding='utf8') as fh: csv.writer(fh).writerows(rows)
 import collections
@@ -130,7 +130,7 @@ PL=[]
 for r in rows:
     if r[0].startswith('#') or not r[2]: continue
     ids_=sorted(set(slug[n] for n in r[2].split('|') if n in slug))
-    if ids_: PL.append({"t":META[r[0]][0],"y":r[3],"f":r[0].replace(os.sep,"/"),"a":ids_,"u":META[r[0]][1],"k":TOP.get(r[0].replace(os.sep,"/"),[])})
+    if ids_: PL.append({"t":META[r[0]][0],"y":r[3],"f":r[0].replace(os.sep,"/"),"a":ids_,"u":META[r[0]][1],"k":TOP.get(r[0].replace(os.sep,"/"),[]),"b":META[r[0]][2]})
 json.dump({"papers":PL,"built":g['built']},open(S+'/papers.json','w',encoding='utf8'),ensure_ascii=False)
 print('paper list',len(PL))
 print('nodes',len(g['nodes']),'edges',len(g['edges']),'max edge',max((e[2] for e in g['edges']),default=0))
