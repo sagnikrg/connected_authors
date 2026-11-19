@@ -345,7 +345,7 @@ function tipLink(e,d){
   if(x+250>s.width)x=e.clientX-s.left-250; if(y+70>s.height)y=e.clientY-s.top-70;
   t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
 }
-/* paper rows: the title opens the Dropbox copy (a web page may not open local files), "copy path" gives the local path for Explorer */
+/* paper rows: the title is an okpdf: link (local handler connected_authors/local/okpdf.js opens the Dropbox copy in Okular); "copy path" and "Dropbox" are fallbacks */
 const DROP="C:\\Users\\Ritam\\Dropbox\\";
 const localPath=f=>DROP+f.split("/").join("\\");
 function dropboxUrl(f){const i=f.lastIndexOf("/");return "https://www.dropbox.com/home/"+f.slice(0,i).split("/").map(encodeURIComponent).join("/")+"?preview="+encodeURIComponent(f.slice(i+1));}
@@ -360,11 +360,12 @@ function paperList(list){
   const ul=document.createElement("ul"); ul.className="plist";
   for(const p of list.slice().sort(byYear)){
     const li=document.createElement("li");
-    const a=document.createElement("a"); a.href=dropboxUrl(p.f); a.target="_blank"; a.rel="noopener"; a.textContent=p.t; a.title="Open the copy in Dropbox: "+p.f;
+    const a=document.createElement("a"); a.href="okpdf:"+encodeURIComponent(p.f); a.textContent=p.t; a.title="Open in Okular: "+p.f;
     const m=document.createElement("div"); m.className="pm";
     if(p.y) m.append(Object.assign(document.createElement("span"),{textContent:p.y}));
     const c=document.createElement("button"); c.type="button"; c.className="mini"; c.textContent="copy path"; c.title=localPath(p.f);
     c.addEventListener("click",()=>copyText(localPath(p.f),c)); m.append(c);
+    const dbx=document.createElement("a"); dbx.href=dropboxUrl(p.f); dbx.target="_blank"; dbx.rel="noopener"; dbx.textContent="Dropbox"; m.append(dbx);
     if(p.u){const o=document.createElement("a");o.href=p.u;o.target="_blank";o.rel="noopener";o.textContent=p.u.includes("arxiv")?"arXiv":"journal";m.append(o);}
     li.append(a,m); ul.append(li);
   }
