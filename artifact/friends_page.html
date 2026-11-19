@@ -125,7 +125,7 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
         <button class="gbtn" id="only" type="button" aria-pressed="false" title="When someone is selected, hide everyone who is not their co-author">Only their cluster</button>
         <button class="gbtn" id="lonely" type="button" aria-pressed="false">Hide unlinked</button>
         <button class="gbtn" id="labels" type="button" aria-pressed="false">All names</button>
-        <button class="gbtn" id="recency" type="button" aria-pressed="true" title="Shade each bubble by the median year of their papers here (log scale: recent years spread out, old ones bunch together)">Recency shade</button>
+        <button class="gbtn" id="recency" type="button" aria-pressed="true" title="Shade bubbles by their most recent paper here, links by the most recent paper the two share (log scale: recent years spread out, old ones bunch together)">Recency shade</button>
         <button class="gbtn" id="reset" type="button">Reset view</button>
       </div>
       <div class="legend">
@@ -224,9 +224,11 @@ let AMAX=40;
 const papersOf=id=>PAP.filter(p=>p.a.includes(id));
 const papersOfPair=(a,b)=>PAP.filter(p=>p.a.includes(a)&&p.a.includes(b));
 const byYear=(x,y)=>(+y.y||0)-(+x.y||0)||x.t.localeCompare(y.t);
-function medYear(id){const ys=papersOf(id).map(p=>+p.y).filter(Boolean).sort((a,b)=>a-b);if(!ys.length)return null;const m=ys.length>>1;return ys.length%2?ys[m]:Math.round((ys[m-1]+ys[m])/2);}
+const lastYear=list=>{const ys=list.map(p=>+p.y).filter(Boolean);return ys.length?Math.max(...ys):null;};
+const medYear=id=>lastYear(papersOf(id));
 const freshness=y=>y==null?null:1-Math.log1p(Math.max(0,NOW-y))/Math.log1p(AMAX);
 function fillOf(d,L){const c=colorOf(L);if(!recency||!PAP.length)return c;const f=freshness(d.my);return f==null?c:d3.interpolateRgb(css("--graph-bg"),c)(0.18+0.82*f);}
+function edgeCol(d){const c=css("--edge");if(!recency||!PAP.length||d.ly==null)return c;return d3.interpolateRgb(css("--graph-bg"),css("--fg"))(0.12+0.78*freshness(d.ly));}
 function setPapers(list){PAP=list||[];const ys=PAP.map(p=>+p.y).filter(Boolean);AMAX=ys.length?Math.max(10,NOW-Math.min(...ys)):40;}
 let G=null; // {sim, nodeSel, linkSel, nodes, links, zoom, svgSel, gSel}
 let hideLonely=false, allLabels=false, minL=0, onlyCluster=false;
@@ -242,13 +244,13 @@ function buildGraph(){
     const o=prev[r.id]||{}; return {id:r.id,name:r.name,p:graph.nodes[r.id]||0,my:medYear(r.id),x:o.x,y:o.y,vx:o.vx,vy:o.vy};
   });
   const ids=new Set(nodes.map(n=>n.id));
-  const links=graph.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w}));
+  const links=graph.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w,ly:lastYear(papersOfPair(a,b))}));
   const svg=d3.select("#svg"); svg.selectAll("*").remove();
   const box=$("stage").getBoundingClientRect(), W=box.width, H=box.height;
   svg.attr("viewBox",[-W/2,-H/2,W,H]);
   const g=svg.append("g");
   const link=g.append("g").attr("stroke",css("--edge")).attr("stroke-linecap","round").selectAll("line").data(links).join("line")
-    .attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",0.45);
+    .attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",0.45).attr("stroke",d=>edgeCol(d));
   const hit=g.append("g").attr("stroke","transparent").selectAll("line").data(links).join("line").attr("class","hit")
     .attr("stroke-width",d=>Math.max(12,4+1.6*d.w))
     .on("click",(e,d)=>{e.stopPropagation();selectPair(d.source.id,d.target.id);})
@@ -305,28 +307,28 @@ function highlight(){
   if(selPair){
     const [a,b]=selPair, on=d=>(d.source.id===a&&d.target.id===b)||(d.source.id===b&&d.target.id===a);
     G.node.attr("display",null).attr("opacity",d=>d.id===a||d.id===b?1:0.15);
-    G.link.attr("display",null).attr("stroke-opacity",d=>on(d)?0.95:0.05).attr("stroke",d=>on(d)?css("--fg"):css("--edge"));
+    G.link.attr("display",null).attr("stroke-opacity",d=>on(d)?0.95:0.05).attr("stroke",d=>on(d)?css("--fg"):edgeCol(d));
     G.node.select("text").attr("display",d=>d.id===a||d.id===b?null:"none");
     return;
   }
-  if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("stroke-opacity",0.45).attr("stroke",css("--edge")).attr("display",null);applyLabels();return;}
+  if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("stroke-opacity",d=>recency&&PAP.length&&d.ly!=null?0.75:0.45).attr("stroke",d=>edgeCol(d)).attr("display",null);applyLabels();return;}
   const nb=new Set([sel,...neighbours(sel).map(x=>x[0])]);
   const touches=d=>d.source.id===sel||d.target.id===sel;
   if(onlyCluster){
     G.node.attr("display",d=>nb.has(d.id)?null:"none").attr("opacity",1);
     G.link.attr("display",d=>nb.has(d.source.id)&&nb.has(d.target.id)?null:"none")
-          .attr("stroke-opacity",d=>touches(d)?0.9:0.35).attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+          .attr("stroke-opacity",d=>touches(d)?0.9:0.35).attr("stroke",d=>touches(d)?css("--fg"):edgeCol(d));
   } else {
     G.node.attr("display",null).attr("opacity",d=>nb.has(d.id)?1:0.15);
     G.link.attr("display",null).attr("stroke-opacity",d=>touches(d)?0.9:0.05)
-          .attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+          .attr("stroke",d=>touches(d)?css("--fg"):edgeCol(d));
   }
   applyLabels();
 }
 function tipShow(e,d){
   const t=$("tip"), s=$("stage").getBoundingClientRect(), nb=neighbours(d.id), R=byId();
   t.innerHTML=""; const b=document.createElement("b"); b.textContent=d.name; t.append(b);
-  const l=document.createElement("div"); l.textContent=`${d.p} paper${d.p===1?"":"s"} · ${nb.length} co-author${nb.length===1?"":"s"} here`+(d.my?` · median year ${d.my}`:"");
+  const l=document.createElement("div"); l.textContent=`${d.p} paper${d.p===1?"":"s"} · ${nb.length} co-author${nb.length===1?"":"s"} here`+(d.my?` · latest paper ${d.my}`:"");
   t.append(l);
   if(nb.length){const m=document.createElement("div");m.style.color="var(--muted)";m.textContent="Most with "+nb.slice(0,3).map(([id,w])=>(R[id]?.name||id)+" ("+w+")").join(", ");t.append(m);}
   t.hidden=false;
@@ -337,7 +339,7 @@ function tipShow(e,d){
 function tipLink(e,d){
   const t=$("tip"), s=$("stage").getBoundingClientRect(), R=byId();
   t.innerHTML=""; const b=document.createElement("b"); b.textContent=(R[d.source.id]?.name||d.source.id)+" & "+(R[d.target.id]?.name||d.target.id); t.append(b);
-  const l=document.createElement("div"); l.textContent=`${d.w} shared paper${d.w===1?"":"s"} · click for the list`; t.append(l);
+  const l=document.createElement("div"); l.textContent=`${d.w} shared paper${d.w===1?"":"s"}${d.ly?" · latest "+d.ly:""} · click for the list`; t.append(l);
   t.hidden=false;
   let x=e.clientX-s.left+12, y=e.clientY-s.top+12;
   if(x+250>s.width)x=e.clientX-s.left-250; if(y+70>s.height)y=e.clientY-s.top-70;
@@ -372,7 +374,7 @@ function selectPair(a,b){
   sel=null; selPair=[a,b]; highlight();
   const R=byId(), P=$("panel"), list=papersOfPair(a,b); P.replaceChildren();
   const h=document.createElement("h3"); h.textContent=(R[a]?.name||a)+" & "+(R[b]?.name||b);
-  const m=document.createElement("p"); m.className="meta"; m.textContent=`${list.length} shared paper${list.length===1?"":"s"} in the collection`;
+  const m=document.createElement("p"); m.className="meta"; const ly=lastYear(list); m.textContent=`${list.length} shared paper${list.length===1?"":"s"} in the collection${ly?" · latest "+ly:""}`;
   const nav=document.createElement("div"); nav.className="toggles";
   for(const id of [a,b]){const x=document.createElement("button");x.type="button";x.className="gbtn";x.textContent="→ "+(R[id]?.name||id);x.addEventListener("click",()=>select(id));nav.append(x);}
   P.append(h,m,paperList(list),nav);
@@ -393,7 +395,7 @@ function select(id){
   const pill=document.createElement("span"); pill.className="pill"; pill.style.background=colorOf(L);
   pill.textContent=L>=2?"Core":L===1?"Strong overlap":"Superset";
   const m=document.createElement("p"); m.className="meta";
-  const my=medYear(id); m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${my?" · median year "+my:""}${r?.folder?" · MIPT/"+r.folder:""}`;
+  const my=medYear(id); m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${my?" · latest paper "+my:""}${r?.folder?" · MIPT/"+r.folder:""}`;
   P.append(h,pill,m);
   if(nb.length){
     const s=document.createElement("p"); s.className="meta"; s.textContent="Co-authors in the collection (shared papers). Click a name for the shared papers, → to go to them:";
