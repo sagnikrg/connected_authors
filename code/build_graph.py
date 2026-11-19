@@ -10,8 +10,8 @@ special={"Andrea De Luca":("De Luca","a"),"Sankar Das Sarma":("Das Sarma","s"),"
 C={}
 for n in core:
     last,ini=special.get(n,(A(n).split()[-1],A(n)[0].lower()))
-    C[(A(last).lower().replace(' ','').replace('-',''),ini)]=(A(last),n)
-def key(last,first): return (A(last).lower().replace(' ','').replace('-',''),(A(first).strip()[:1] or '?').lower())
+    C[(re.sub('[^a-z]','',A(last).lower()),ini)]=(A(last),n)
+def key(last,first): return (re.sub('[^a-z]','',A(last).lower()),(re.sub('[^A-Za-z]','',A(first))[:1] or '?').lower())
 # bib index
 ent=[]
 for f in glob.glob(BIB+'/*.bib'):
@@ -59,7 +59,7 @@ for R in ROOTS:
             p=os.path.join(dp,f)
             f=re.sub(r' \[[^\]]*\](?=\.pdf$)','',f)
             t=subprocess.run(['pdftotext','-l','1','-q',p,'-'],capture_output=True,timeout=60).stdout.decode('utf8','ignore')
-            ids=re.findall(r'(\d{4}\.\d{4,5})',f+' '+t[:3000])
+            ids=re.findall(r'(\d{4}\.\d{4,5})',f)+re.findall(r'arXiv:(\d{4}\.\d{4,5})v\d+\s*\[',t)  # own id only: filename or the arXiv margin stamp, not citations
             dois=[d.lower().rstrip('.') for d in re.findall(r'10\.\d{4,}/[^\s,;]+',t[:4000])]
             pr=re.findall(r'(Phys[A-Za-z]*\.\d+\.\w+)',f)
             e=None;how=''
@@ -78,7 +78,7 @@ for R in ROOTS:
                 best=max(ent,key=lambda e:len(w&e['t'])/max(len(e['t']),1)) if w else None
                 if best and best['t'] and len(w&best['t'])/len(best['t'])>=0.8 and len(best['t'])>=3: e=best;how='title'
             if e and how in('doi','arxiv','physrev'):
-                tw=set(w for w in re.findall(r'[a-z0-9]+',A(t[:4000]).lower()) if len(w)>3)
+                tw=set(w for w in re.findall(r'[a-z0-9]+',A(t[:700]).lower()) if len(w)>3)
                 fw=set(w for w in re.findall(r'[a-z0-9]+',A(f).lower()) if len(w)>3)
                 ov=len(e['t']&(tw|fw))/max(len(e['t']),1)
                 if ov<0.6: rows.append(('#REJECT '+os.path.relpath(p,os.path.dirname(R)),how,f'{ov:.2f}')); e=None
@@ -113,6 +113,11 @@ cnt=collections.Counter(); ed=collections.Counter(); seen=set()
 for r in rows:
     if r[0].startswith('#') or len(r)<3 or not r[2]: continue
     ids=sorted(set(slug[n] for n in r[2].split('|') if n in slug))
+    # count each paper once: supplementary files and extra versions (same link or same title) are not new papers
+    if re.search(r'supp|\bSM\b|_SM\b|appendi|supplement|material',os.path.basename(r[0]),re.I): continue
+    pk=META[r[0]][1].lower() or ' '.join(re.findall(r'[a-z0-9]+',A(META[r[0]][0]).lower()))
+    if pk in seen: continue
+    seen.add(pk)
     for i in ids: cnt[i]+=1
     for a,b in itertools.combinations(ids,2): ed[(a,b)]+=1
 g={"nodes":{k:cnt.get(k,0) for k in slug.values()},"edges":[[a,b,w] for (a,b),w in sorted(ed.items())],
