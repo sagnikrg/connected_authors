@@ -360,7 +360,11 @@ function paperList(list){
   const ul=document.createElement("ul"); ul.className="plist";
   for(const p of list.slice().sort(byYear)){
     const li=document.createElement("li");
-    const a=document.createElement("a"); a.href="okpdf:"+encodeURIComponent(p.f); a.target="_blank"; a.rel="noopener"; a.textContent=p.t; a.title="Open the local copy in a Firefox tab: "+p.f;
+    const a=document.createElement("a"); a.href="okpdf:"+encodeURIComponent(p.f); a.textContent=p.t;
+    a.addEventListener("click",e=>{ // launch from a helper tab (the frame itself may not), then close that tab again
+      e.preventDefault(); const w=window.open(a.href,"_blank");
+      if(w) setTimeout(()=>{try{w.close();}catch(_){}},1500); else location.href=a.href;
+    }); a.title="Open the local copy in a Firefox tab: "+p.f;
     const m=document.createElement("div"); m.className="pm";
     if(p.y) m.append(Object.assign(document.createElement("span"),{textContent:p.y}));
     const c=document.createElement("button"); c.type="button"; c.className="mini"; c.textContent="copy path"; c.title=localPath(p.f);
