@@ -12,13 +12,17 @@ import json,glob,os,sys
 def caption(g):
     n=sum(1 for v in g['nodes'].values() if v>0)
     return (f"{n} people with papers, {len(g['edges'])} co-author links, from {g['papers']} PDFs (built {g['built']}). "
-            "Click a bubble to see their co-authors in the collection. Drag bubbles, scroll or pinch to zoom, click empty space to clear.")
+            "Click a bubble to see their co-authors and papers, click a line for the papers two people share. Drag bubbles, scroll or pinch to zoom, click empty space to clear.")
 args=[a for a in sys.argv[1:] if not a.startswith('--')]; standalone='--standalone' in sys.argv
 D,tpl,out=args
 g=json.load(open(os.path.join(D,'graph.json'),encoding='utf8'))
 names={os.path.basename(f)[:-5]:json.load(open(f,encoding='utf8'))['name'] for f in glob.glob(os.path.join(D,'friends','*.json'))}
 people=[{"id":k,"name":names[k],"papers":v} for k,v in g['nodes'].items() if k in names]
 data={"people":people,"edges":g['edges'],"papers":g['papers'],"built":g['built']}
+# per-paper list for the paper lists and the recency shade; public, so no local file paths
+pj=os.path.join(D,'papers.json')
+if os.path.exists(pj):
+    data["list"]=[{"t":p["t"],"y":p["y"],"a":[x for x in p["a"] if x in names],"u":p["u"]} for p in json.load(open(pj,encoding='utf8'))["papers"]]
 html=open(tpl,encoding='utf8').read().replace('/*DATA*/null',json.dumps(data,ensure_ascii=False).replace('</','<\\/'))
 if standalone:
     i=min(x for x in (html.find('<div class="wrap">'),html.find('<div class="stage"')) if x>=0)

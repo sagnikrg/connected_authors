@@ -46,7 +46,21 @@ h1{font-family:var(--display);font-weight:600;font-size:1.6rem;margin:0;text-wra
 .node{cursor:pointer}
 .node text{font-family:var(--body);font-size:10px;fill:var(--fg);paint-order:stroke;stroke:var(--graph-bg);stroke-width:3px;pointer-events:none}
 .foot{font-size:.78rem;color:var(--muted)}
+.hit{cursor:pointer}
+.plist{list-style:none;margin:0;padding:0;font-size:.82rem;display:flex;flex-direction:column;gap:8px}
+.plist li{display:flex;flex-direction:column;gap:1px;min-width:0;overflow-wrap:anywhere}
+.plist a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+.plist a:hover{text-decoration-color:var(--fg)}
+.plist .pm{color:var(--muted);font-size:.74rem}
+.panel ol .go{all:unset;cursor:pointer;margin-left:6px;font-size:.78rem;color:var(--muted)}
+.panel ol .go:hover{color:var(--fg)}
+details.pl summary{cursor:pointer;font-size:.82rem;color:var(--muted)}
+.prow{display:flex;gap:6px;flex-wrap:wrap}
+.ramp{display:inline-block;width:60px;height:9px;border-radius:5px;vertical-align:middle;margin:0 4px;background:linear-gradient(90deg,color-mix(in srgb,var(--node) 18%,var(--graph-bg)),var(--node))}
 html,body{height:100%;overflow:hidden}
+/* embed: the detail panel floats over the plot, only while something is selected */
+.panel{position:absolute;right:10px;top:46px;bottom:10px;width:min(290px,46%);max-height:none!important;border:1px solid var(--line)!important;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.14);z-index:3}
+.panel[data-empty="1"]{display:none}
 body{padding:0!important}
 .stage{height:100%!important;width:100%;background:var(--graph-bg)}
 </style>
@@ -59,12 +73,13 @@ body{padding:0!important}
         <button class="gbtn" id="only" type="button" aria-pressed="false" title="When someone is selected, hide everyone who is not their co-author">Only their cluster</button>
         <button class="gbtn" id="lonely" type="button" aria-pressed="false">Hide unlinked</button>
         <button class="gbtn" id="labels" type="button" aria-pressed="false">All names</button>
+        <button class="gbtn" id="recency" type="button" aria-pressed="true" title="Shade bubbles by their most recent paper on my shelf, lines by the most recent paper the two share (log scale)">Recency shade</button>
         <button class="gbtn" id="reset" type="button">Reset view</button>
       </div>
       <div class="legend" id="legend"></div>
       <div class="tip" id="tip" hidden></div>
     </div>
-<aside class="panel" id="panel" hidden></aside>
+<aside class="panel" id="panel" aria-live="polite"></aside>
 <p class="foot" id="foot" hidden></p>
 
 <script>
@@ -74,7 +89,19 @@ const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim
 const NAME=Object.fromEntries(DATA.people.map(p=>[p.id,p.name]));
 const P=Object.fromEntries(DATA.people.map(p=>[p.id,p.papers]));
 const rad=p=>4+3.2*Math.sqrt(p);
-let G=null, sel=null, hideLonely=false, allLabels=false, onlyCluster=false;
+let G=null, sel=null, selPair=null, recency=true, hideLonely=false, allLabels=false, onlyCluster=false;
+/* papers + recency: freshness 1 for this year, falling like log(1+age), so 30 vs 35 years ago look alike but this year vs two years ago do not */
+const PAP=DATA.list||[];
+const NOW=new Date().getFullYear();
+const AMAX=(()=>{const ys=PAP.map(p=>+p.y).filter(Boolean);return ys.length?Math.max(10,NOW-Math.min(...ys)):40;})();
+const papersOf=id=>PAP.filter(p=>p.a.includes(id));
+const papersOfPair=(a,b)=>PAP.filter(p=>p.a.includes(a)&&p.a.includes(b));
+const lastYear=list=>{const ys=list.map(p=>+p.y).filter(Boolean);return ys.length?Math.max(...ys):null;};
+const byYear=(x,y)=>(+y.y||0)-(+x.y||0)||x.t.localeCompare(y.t);
+const freshness=y=>y==null?null:1-Math.log1p(Math.max(0,NOW-y))/Math.log1p(AMAX);
+function fillOf(d){const c=css("--node");if(!recency||!PAP.length)return c;const f=freshness(d.my);return f==null?c:d3.interpolateRgb(css("--graph-bg"),c)(0.18+0.82*f);}
+function edgeCol(d){const c=css("--edge");if(!recency||!PAP.length||d.ly==null)return c;return d3.interpolateRgb(css("--graph-bg"),css("--fg"))(0.12+0.78*freshness(d.ly));}
+const edgeOp=d=>recency&&PAP.length&&d.ly!=null?0.75:0.45;
 const NB={}; for(const [a,b,w] of DATA.edges){(NB[a]=NB[a]||[]).push([b,w]);(NB[b]=NB[b]||[]).push([a,w]);}
 for(const k in NB) NB[k].sort((x,y)=>y[1]-x[1]);
 const neighbours=id=>NB[id]||[];
@@ -82,14 +109,18 @@ const rm=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function build(){
   const prev=G?Object.fromEntries(G.nodes.map(n=>[n.id,n])):{};
-  const nodes=DATA.people.filter(p=>p.papers>0&&(!hideLonely||NB[p.id])).map(p=>{const o=prev[p.id]||{};return {id:p.id,name:p.name,p:p.papers,x:o.x,y:o.y,vx:o.vx,vy:o.vy};});
+  const nodes=DATA.people.filter(p=>p.papers>0&&(!hideLonely||NB[p.id])).map(p=>{const o=prev[p.id]||{};return {id:p.id,name:p.name,p:p.papers,my:lastYear(papersOf(p.id)),x:o.x,y:o.y,vx:o.vx,vy:o.vy};});
   const ids=new Set(nodes.map(n=>n.id));
-  const links=DATA.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w}));
+  const links=DATA.edges.filter(([a,b])=>ids.has(a)&&ids.has(b)).map(([a,b,w])=>({source:a,target:b,w,ly:lastYear(papersOfPair(a,b))}));
   const svg=d3.select("#svg"); svg.selectAll("*").remove();
   const box=$("stage").getBoundingClientRect(); svg.attr("viewBox",[-box.width/2,-box.height/2,box.width,box.height]);
   const g=svg.append("g");
   const link=g.append("g").attr("stroke-linecap","round").selectAll("line").data(links).join("line")
-    .attr("stroke",css("--edge")).attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",0.45);
+    .attr("stroke",d=>edgeCol(d)).attr("stroke-width",d=>0.8+1.6*d.w).attr("stroke-opacity",d=>edgeOp(d));
+  const hit=g.append("g").attr("stroke","transparent").selectAll("line").data(links).join("line").attr("class","hit")
+    .attr("stroke-width",d=>Math.max(12,4+1.6*d.w))
+    .on("click",(e,d)=>{e.stopPropagation();selectPair(d.source.id,d.target.id);})
+    .on("mouseenter",tipLink).on("mousemove",tipLink).on("mouseleave",()=>{$("tip").hidden=true;});
   const node=g.append("g").selectAll("g").data(nodes,d=>d.id).join("g").attr("class","node");
   node.append("circle").attr("r",d=>rad(d.p)).attr("fill",css("--node")).attr("stroke",css("--graph-bg")).attr("stroke-width",1.5);
   node.append("text").attr("dy",d=>-rad(d.p)-4).attr("text-anchor","middle").text(d=>d.name);
@@ -98,7 +129,8 @@ function build(){
     .force("charge",d3.forceManyBody().strength(d=>-180-60*Math.sqrt(d.p)).distanceMax(600))
     .force("collide",d3.forceCollide(d=>rad(d.p)+10))
     .force("x",d3.forceX(0).strength(0.025)).force("y",d3.forceY(0).strength(0.035))
-    .on("tick",()=>{link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    .on("tick",()=>{hit.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+                    link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
                     node.attr("transform",d=>`translate(${d.x},${d.y})`);});
   const fresh=!Object.keys(prev).length; if(!fresh) sim.alpha(0.5);
   if(rm()){sim.stop();for(let i=0;i<300;i++)sim.tick();sim.on("tick")();}
@@ -123,49 +155,96 @@ function labels(){
 }
 function highlight(){
   if(!G)return;
-  G.node.select("circle").attr("fill",d=>d.id===sel?css("--node-hi"):css("--node"));
-  if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("display",null).attr("stroke-opacity",0.45).attr("stroke",css("--edge"));labels();return;}
+  G.node.select("circle").attr("fill",d=>d.id===sel?css("--node-hi"):fillOf(d));
+  $("rl").hidden=!(recency&&PAP.length);
+  if(selPair){
+    const [a,b]=selPair, on=d=>(d.source.id===a&&d.target.id===b)||(d.source.id===b&&d.target.id===a);
+    G.node.attr("display",null).attr("opacity",d=>d.id===a||d.id===b?1:0.15);
+    G.link.attr("display",null).attr("stroke-opacity",d=>on(d)?0.95:0.05).attr("stroke",d=>on(d)?css("--fg"):edgeCol(d));
+    G.node.select("text").attr("display",d=>d.id===a||d.id===b?null:"none");
+    return;
+  }
+  if(!sel){G.node.attr("opacity",1).attr("display",null);G.link.attr("display",null).attr("stroke-opacity",d=>edgeOp(d)).attr("stroke",d=>edgeCol(d));labels();return;}
   const nb=new Set([sel,...neighbours(sel).map(x=>x[0])]);
   const touches=d=>d.source.id===sel||d.target.id===sel;
   if(onlyCluster){
     G.node.attr("display",d=>nb.has(d.id)?null:"none").attr("opacity",1);
-    G.link.attr("display",d=>nb.has(d.source.id)&&nb.has(d.target.id)?null:"none").attr("stroke-opacity",d=>touches(d)?0.9:0.35).attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+    G.link.attr("display",d=>nb.has(d.source.id)&&nb.has(d.target.id)?null:"none").attr("stroke-opacity",d=>touches(d)?0.9:0.35).attr("stroke",d=>touches(d)?css("--fg"):edgeCol(d));
   } else {
     G.node.attr("display",null).attr("opacity",d=>nb.has(d.id)?1:0.15);
-    G.link.attr("display",null).attr("stroke-opacity",d=>touches(d)?0.9:0.05).attr("stroke",d=>touches(d)?css("--fg"):css("--edge"));
+    G.link.attr("display",null).attr("stroke-opacity",d=>touches(d)?0.9:0.05).attr("stroke",d=>touches(d)?css("--fg"):edgeCol(d));
   }
   labels();
 }
 function tip(e,d){
   const t=$("tip"), s=$("stage").getBoundingClientRect(), nb=neighbours(d.id);
   t.replaceChildren(Object.assign(document.createElement("b"),{textContent:d.name}),
-    Object.assign(document.createElement("div"),{textContent:`${d.p} paper${d.p===1?"":"s"} on my shelf · ${nb.length} co-author${nb.length===1?"":"s"} here`}));
+    Object.assign(document.createElement("div"),{textContent:`${d.p} paper${d.p===1?"":"s"} on my shelf · ${nb.length} co-author${nb.length===1?"":"s"} here`+(d.my?` · latest ${d.my}`:"")}));
   if(nb.length){const m=document.createElement("div");m.style.color="var(--muted)";m.textContent="Most with "+nb.slice(0,3).map(([id,w])=>NAME[id]+" ("+w+")").join(", ");t.append(m);}
   t.hidden=false;
   let x=e.clientX-s.left+12,y=e.clientY-s.top+12;
   if(x+250>s.width)x=e.clientX-s.left-250; if(y+90>s.height)y=e.clientY-s.top-90;
   t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
 }
+function tipLink(e,d){
+  const t=$("tip"), s=$("stage").getBoundingClientRect();
+  t.replaceChildren(Object.assign(document.createElement("b"),{textContent:NAME[d.source.id]+" & "+NAME[d.target.id]}),
+    Object.assign(document.createElement("div"),{textContent:`${d.w} paper${d.w===1?"":"s"} together${d.ly?" · latest "+d.ly:""} · click for the list`}));
+  t.hidden=false;
+  let x=e.clientX-s.left+12,y=e.clientY-s.top+12;
+  if(x+250>s.width)x=e.clientX-s.left-250; if(y+70>s.height)y=e.clientY-s.top-70;
+  t.style.left=Math.max(4,x)+"px"; t.style.top=Math.max(4,y)+"px";
+}
+function paperList(list){
+  const ul=document.createElement("ul"); ul.className="plist";
+  for(const p of list.slice().sort(byYear)){
+    const li=document.createElement("li"); let a;
+    if(p.u){a=document.createElement("a");a.href=p.u;a.target="_blank";a.rel="noopener";a.title=p.u.includes("arxiv")?"arXiv":"Journal";}
+    else a=document.createElement("span");
+    a.textContent=p.t; li.append(a);
+    const m=document.createElement("span"); m.className="pm"; m.textContent=[p.y,p.u?(p.u.includes("arxiv")?"arXiv":"journal"):""].filter(Boolean).join(" · ");
+    if(m.textContent) li.append(m);
+    ul.append(li);
+  }
+  return ul;
+}
+function clearBtn(){const b=document.createElement("button");b.type="button";b.className="gbtn";b.textContent="Clear";b.addEventListener("click",()=>select(null));return b;}
 function panel(){
-  const el=$("panel"); el.replaceChildren(); el.dataset.empty=sel?"0":"1";
+  const el=$("panel"); el.replaceChildren(); el.dataset.empty=sel||selPair?"0":"1";
+  if(selPair){
+    const [a,b]=selPair, list=papersOfPair(a,b), ly=lastYear(list);
+    el.append(Object.assign(document.createElement("h3"),{textContent:NAME[a]+" & "+NAME[b]}),
+      Object.assign(document.createElement("p"),{className:"meta",textContent:`${list.length} paper${list.length===1?"":"s"} together on my shelf${ly?" · latest "+ly:""}`}),
+      paperList(list));
+    const row=document.createElement("div"); row.className="prow";
+    for(const id of [a,b]){const x=document.createElement("button");x.type="button";x.className="gbtn";x.textContent="→ "+NAME[id];x.addEventListener("click",()=>centreOn(id));row.append(x);}
+    row.append(clearBtn()); el.append(row);
+    return;
+  }
   if(!sel){
     el.append(Object.assign(document.createElement("h3"),{textContent:"Pick someone"}),
       Object.assign(document.createElement("p"),{className:"meta",textContent:`${G?G.nodes.length:0} people, ${G?G.links.length:0} co-author links.`}),
-      Object.assign(document.createElement("p"),{className:"meta",textContent:"Click a bubble or type a name to see who they wrote with. Drag bubbles, scroll or pinch to zoom, click empty space to clear."}));
+      Object.assign(document.createElement("p"),{className:"meta",textContent:"Click a bubble or type a name to see who they wrote with, click a line for the papers the two share. Drag bubbles, scroll or pinch to zoom, click empty space to clear."}));
     return;
   }
   const nb=neighbours(sel);
   el.append(Object.assign(document.createElement("h3"),{textContent:NAME[sel]}),
-    Object.assign(document.createElement("p"),{className:"meta",textContent:`${P[sel]} paper${P[sel]===1?"":"s"} on my shelf`}));
+    Object.assign(document.createElement("p"),{className:"meta",textContent:`${P[sel]} paper${P[sel]===1?"":"s"} on my shelf`+(lastYear(papersOf(sel))?" · latest "+lastYear(papersOf(sel)):"")}));
   if(nb.length){
-    el.append(Object.assign(document.createElement("p"),{className:"meta",textContent:"Co-authors here (papers together):"}));
+    el.append(Object.assign(document.createElement("p"),{className:"meta",textContent:"Co-authors here (papers together). Click a name for the shared papers, → to go to them:"}));
     const ol=document.createElement("ol");
     for(const [id,w] of nb){const li=document.createElement("li");const b=document.createElement("button");b.type="button";b.textContent=NAME[id];
-      b.addEventListener("click",()=>centreOn(id));li.append(b,Object.assign(document.createElement("span"),{className:"w",textContent:" "+w}));ol.append(li);}
+      b.title="Show the papers they wrote together"; b.addEventListener("click",()=>selectPair(sel,id));
+      const go=document.createElement("button");go.type="button";go.className="go";go.textContent="→";go.title="Go to "+NAME[id];go.setAttribute("aria-label","Go to "+NAME[id]);go.addEventListener("click",()=>centreOn(id));
+      li.append(b,Object.assign(document.createElement("span"),{className:"w",textContent:" "+w}),go);ol.append(li);}
     el.append(ol);
   } else el.append(Object.assign(document.createElement("p"),{className:"meta",textContent:"No co-authored papers with anyone else here."}));
+  const mine=papersOf(sel);
+  if(mine.length){const dt=document.createElement("details");dt.className="pl";dt.append(Object.assign(document.createElement("summary"),{textContent:`Their papers (${mine.length})`}),paperList(mine));el.append(dt);}
+  const row=document.createElement("div"); row.className="prow"; row.append(clearBtn()); el.append(row);
 }
-function select(id){sel=id;highlight();panel();}
+function select(id){sel=id;selPair=null;highlight();panel();}
+function selectPair(a,b){sel=null;selPair=[a,b];highlight();panel();}
 function centreOn(id,tries=0){
   if(!G)return;
   const n=G.nodes.find(x=>x.id===id);
@@ -184,10 +263,11 @@ $("find").addEventListener("change",findGo);
 $("find").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();findGo();}});
 $("only").addEventListener("click",e=>{onlyCluster=!onlyCluster;e.currentTarget.setAttribute("aria-pressed",String(onlyCluster));highlight();});
 $("lonely").addEventListener("click",e=>{hideLonely=!hideLonely;e.currentTarget.setAttribute("aria-pressed",String(hideLonely));if(sel&&!NB[sel])sel=null;build();});
+$("recency").addEventListener("click",e=>{recency=!recency;e.currentTarget.setAttribute("aria-pressed",String(recency));highlight();});
 $("labels").addEventListener("click",e=>{allLabels=!allLabels;e.currentTarget.setAttribute("aria-pressed",String(allLabels));labels();});
 $("reset").addEventListener("click",()=>{if(G)G.svg.transition().duration(300).call(G.zoom.transform,d3.zoomIdentity);select(null);});
 let rsz; addEventListener("resize",()=>{clearTimeout(rsz);rsz=setTimeout(()=>{if(G){const b=$("stage").getBoundingClientRect();G.svg.attr("viewBox",[-b.width/2,-b.height/2,b.width,b.height]);}},150);});
-$("legend").textContent="Bubble size: papers on my shelf · line thickness: papers they wrote together";
+$("legend").innerHTML='Bubble size: papers on my shelf · line thickness: papers they wrote together<span id="rl"> · shade: older<i class="ramp"></i>'+NOW+"</span>";
 $("foot").textContent=`Snapshot of ${DATA.papers} PDFs, ${DATA.built}. Counted from my own collection, so it says what I read, not who is most important.`;
 if(window.d3) build(); else $("panel").textContent="The graph library did not load. Reload the page.";
 </script>
