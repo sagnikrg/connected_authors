@@ -48,6 +48,8 @@ def fromtext(t):
         mm=re.search(pat,A(head))
         if mm: found.append((mm.start(),n))
     return [l for _,l in sorted(found)]
+# papers whose author only shares surname + initial with a friend (bib key -> friend names to drop)
+NOT_SAME={"Dhar2006PreservingStatesInverting":{"Sthitadhi Roy"}}  # S. M. Roy, Tony 2026-11-24
 rows=[]; META={}
 def ftitle(f):
     x=re.sub(r'\.pdf$','',f,flags=re.I); x=re.sub(r'(?:arXiv:)?\d{4}\.\d{4,5}(v\d+)?','',x); x=re.sub(r'Phys[A-Za-z]*\.\d+\.\w+','',x)
@@ -101,6 +103,7 @@ for R in ROOTS:
             rel=os.path.relpath(p,os.path.dirname(R))
             link=('https://doi.org/'+e['doi']) if e and e['doi'] else ('https://arxiv.org/abs/'+e['ep']) if e and e['ep'] else ('https://arxiv.org/abs/'+ids[0]) if ids and re.search(re.escape(ids[0]),f) else ''
             META[rel]=((e['title'] if e and e['title'] else ftitle(f)),link,(e['key'] if e else ''))
+            tags=[t for t in tags if t not in NOT_SAME.get(META[rel][2],())]  # same surname + initial, different person
             rows.append((rel,how,'|'.join(tags),year))
 with open(S+'/papers.csv','w',newline='',encoding='utf8') as fh: csv.writer(fh).writerows(rows)
 import collections
