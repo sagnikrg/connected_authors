@@ -115,6 +115,8 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
 :root[data-theme="dark"]{--t-dtc:#f0a07c; --t-mbleth:#8cb4ea; --t-experiment:#e0c060; --t-majorana:#c3a2ec; --t-pisg:#ec9cc4; --t-scar:#86d3a5; --t-sff:#b4bfcc;}
 .chips{display:inline-flex;gap:4px;flex-wrap:wrap}
 .chip{font-size:.68rem;font-weight:600;line-height:1.35;padding:0 6px;border-radius:999px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
+a.sch{color:inherit;text-decoration:none;border-bottom:1px dotted currentColor}a.sch:hover{border-bottom-style:solid}
+.orcid{font-size:12px;margin:2px 0 4px}.orcid a{color:var(--muted,#6b7280);text-decoration:none}.orcid a:hover{text-decoration:underline}
 </style>
 
 <div class="wrap">
@@ -171,6 +173,10 @@ section h2 .n{font-variant-numeric:tabular-nums;letter-spacing:0}
 </div>
 
 <script>
+let IDS={}; // meta/ids: slug -> {orcid, scholar}
+const scholarUrl=(id,name)=>{const g=IDS[id]?.scholar; return g?"https://scholar.google.com/citations?user="+encodeURIComponent(g):"https://scholar.google.com/citations?view_op=search_authors&mauthors="+encodeURIComponent(name||"");};
+function nameLink(id,name){const a=document.createElement("a"); a.href=scholarUrl(id,name); a.target="_blank"; a.rel="noopener"; a.className="sch"; a.title=IDS[id]?.scholar?"Google Scholar profile":"Google Scholar author search"; a.textContent=name; return a;}
+function orcidLine(id){const o=IDS[id]?.orcid; if(!o||!/^[0-9X-]{19}$/.test(o)) return null; const d=document.createElement("div"); d.className="orcid"; const a=document.createElement("a"); a.href="https://orcid.org/"+o; a.target="_blank"; a.rel="noopener"; a.textContent="ORCID "+o; d.append(a); return d;}
 let rows=[], q="", db=null, busy=new Set(), graph=null, sel=null, selPair=null, PAP=[], recency=true;
 const $=id=>document.getElementById(id);
 const lvl=r=>typeof r.level==="number"?r.level:(r.core?2:0);
@@ -188,14 +194,14 @@ function card(r){
   const L=lvl(r), dis=!db||busy.has(r.id);
   const c=document.createElement("div"); c.className="card"; c.dataset.level=String(L); c.id="f-"+r.id;
   const top=document.createElement("div"); top.className="top";
-  const n=document.createElement("div"); n.className="name"; n.textContent=r.name;
+  const n=document.createElement("div"); n.className="name"; n.append(nameLink(r.id,r.name));
   const k=document.createElement("div"); k.className="count";
   const p=papers(r.id); k.textContent=p===null?"":(p===1?"1 paper":p+" papers");
   top.append(n,k);
   const d=document.createElement("div"); d.className="d"; d.textContent=r.folder?("MIPT/"+r.folder):(r.note||"no own folder");
   const t=document.createElement("div"); t.className="toggles";
   t.append(toggle("strong","Strong",L>=1,dis,()=>setLevel(r,L>=1?0:1)),toggle("core","Core",L>=2,dis,()=>setLevel(r,L>=2?1:2)));
-  c.append(top,d,t); return c;
+  const oc=orcidLine(r.id); c.append(...(oc?[top,oc,d,t]:[top,d,t])); return c;
 }
 function sortRows(a,b){
   const pa=papers(a.id)||0, pb=papers(b.id)||0;
@@ -418,12 +424,12 @@ function select(id){
     return;
   }
   const R=byId(), r=R[id], L=lvl(r||{}), nb=neighbours(id);
-  const h=document.createElement("h3"); h.textContent=r?.name||id;
+  const h=document.createElement("h3"); h.append(nameLink(id,r?.name||id));
   const pill=document.createElement("span"); pill.className="pill"; pill.style.background=colorOf(L);
   pill.textContent=L>=2?"Core":L===1?"Strong overlap":"Superset";
   const m=document.createElement("p"); m.className="meta";
   const my=medYear(id); m.textContent=`${papers(id)} paper${papers(id)===1?"":"s"} in the collection${my?" · latest paper "+my:""}${r?.folder?" · MIPT/"+r.folder:""}`;
-  P.append(h,pill,m);
+  const oc=orcidLine(id); P.append(...(oc?[h,oc,pill,m]:[h,pill,m]));
   if(nb.length){
     const s=document.createElement("p"); s.className="meta"; s.textContent="Co-authors in the collection (shared papers). Click a name for the shared papers, → to go to them:";
     const ol=document.createElement("ol");
@@ -501,6 +507,7 @@ renderList();
   db.collection("friends").onSnapshot(s=>{
     clearTimeout(t); rows=s.docs.map(d=>({id:d.id,...d.data()})); refresh();
   },e=>{clearTimeout(t);$("status").textContent="Could not load the list: "+(e&&e.message||"");});
+  db.doc("meta/ids").onSnapshot(s=>{ IDS=s.exists?(s.data().ids||{}):{}; refresh(); },()=>{});
   db.doc("meta/papers").onSnapshot(s=>{ setPapers(s.exists?s.data().papers:[]); G=null; graphBuiltFor=""; refresh(); },()=>{});
   db.doc("meta/graph").onSnapshot(s=>{ graph=s.exists?s.data():null; refresh(); },
     e=>{$("gmeta").textContent="Could not load the graph: "+(e&&e.message||"");});
